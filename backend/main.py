@@ -1,8 +1,12 @@
-from fastapi import FastAPI
+from flask import Flask
+from flask_cors import CORS
 
-app = FastAPI()
+app = Flask(__name__)
+CORS(app)
 
-@app.get("/")
-def root():
-    return {"message": "Hello World"}
+@app.route("/")
+def health():
+    return {"message": "API running"}
 
+if __name__ == "__main__":
+    app.run(debug=True)
