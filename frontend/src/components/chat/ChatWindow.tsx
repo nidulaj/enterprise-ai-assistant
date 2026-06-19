@@ -81,22 +81,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         </div>
 
-        {/* Model Switcher Segmented Control */}
-        <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/50">
-          {(["auto", "gemini", "groq"] as ModelOption[]).map((model) => (
-            <button
-              key={model}
-              onClick={() => onChangeModel(model)}
-              className={`rounded-lg px-3 py-1 text-xs font-semibold uppercase tracking-wider transition-all duration-200 ${
-                selectedModel === model
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {model}
-            </button>
-          ))}
-        </div>
       </header>
 
       {/* Main Messages Panel */}
@@ -168,7 +152,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {/* Input Form Panel */}
       <footer className="shrink-0 bg-slate-50 border-t border-slate-200/60 z-10">
-        <ChatInput onSendMessage={onSendMessage} isLoading={isLoading} />
+        <ChatInput
+          onSendMessage={onSendMessage}
+          isLoading={isLoading}
+          selectedModel={selectedModel}
+          onChangeModel={onChangeModel}
+        />
       </footer>
     </div>
   );

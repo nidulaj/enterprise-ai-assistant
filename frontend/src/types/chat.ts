@@ -3,6 +3,7 @@ export interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: string; // ISO string representation
+  model?: ModelOption;
 }
 
 export interface ChatSession {

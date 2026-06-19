@@ -194,13 +194,14 @@ export const useChat = () => {
     setError(null);
 
     try {
-      const assistantResponse = await sendChatMessage(content);
+      const responseData = await sendChatMessage(content, selectedModel);
       
       const assistantMessage: Message = {
         id: `msg-${Date.now() + 1}`,
         role: "assistant",
-        content: assistantResponse,
+        content: responseData.response,
         timestamp: new Date().toISOString(),
+        model: responseData.model,
       };
 
       const finalMessages = [...updatedMessages, assistantMessage];

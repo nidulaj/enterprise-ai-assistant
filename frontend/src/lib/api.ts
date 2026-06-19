@@ -1,4 +1,5 @@
 import axios from "axios";
+import { ModelOption } from "@/types/chat";
 
 // Create Axios instance using environment variable or fallback to backend default port
 const api = axios.create({
@@ -10,20 +11,26 @@ const api = axios.create({
 
 interface ChatRequest {
   message: string;
+  model: ModelOption;
 }
 
 interface ChatResponse {
   response: string;
+  model: ModelOption;
 }
 
 /**
  * Sends a message to the backend assistant endpoint.
  * @param message The user's input text
- * @returns The response text from the assistant
+ * @param model The selected AI model
+ * @returns The response from the assistant, including content and generating model
  */
-export const sendChatMessage = async (message: string): Promise<string> => {
-  const response = await api.post<ChatResponse>("/chat", { message } as ChatRequest);
-  return response.data.response;
+export const sendChatMessage = async (
+  message: string,
+  model: ModelOption
+): Promise<ChatResponse> => {
+  const response = await api.post<ChatResponse>("/chat", { message, model });
+  return response.data;
 };
 
 export default api;

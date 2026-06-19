@@ -50,6 +50,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             <span className="text-xs font-semibold text-slate-500">
               {isAssistant ? "Enterprise AI" : "You"}
             </span>
+            {isAssistant && message.model && (
+              <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded-md bg-indigo-50 border border-indigo-100/80 text-indigo-600 tracking-wider">
+                {message.model}
+              </span>
+            )}
             <span className="text-[10px] text-slate-400">
               {formatTime(message.timestamp)}
             </span>
