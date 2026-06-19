@@ -1,7 +1,7 @@
 from providers.gemini_provider import GeminiProvider
 from providers.groq_provider import GroqProvider
 
-class AIManaer:
+class AIManager:
     def __init__(self):
         self.gemini = GeminiProvider()
         self.groq = GroqProvider()
