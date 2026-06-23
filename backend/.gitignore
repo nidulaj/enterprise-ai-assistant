@@ -55,3 +55,9 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Uploads
+uploads/
+
+# ChromaDB
+chroma_db/

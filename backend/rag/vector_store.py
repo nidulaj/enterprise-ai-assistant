@@ -1,5 +1,5 @@
 import chromadb
-from app.rag.embedding_service import EmbeddingService
+from rag.embeddings import EmbeddingService
 
 class VectorStore:
     def __init__(self):
@@ -18,11 +18,9 @@ class VectorStore:
 
             self.collection.add(
                 ids=[f"{doc_id}_{index}"],
-                document=[chunk],
+                documents=[chunk],
                 embeddings=[embedding],
-                metadatas=[{
-                    "document_id": doc_id
-                }]
+                metadatas=[{"document_id": doc_id}]
             )
 
     def search(self, query, n_results=5):
