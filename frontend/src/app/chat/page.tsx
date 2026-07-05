@@ -20,6 +20,10 @@ export default function ChatPage() {
     selectSession,
     deleteSession,
     sendMessage,
+    documents,
+    isUploading,
+    uploadError,
+    uploadFile,
   } = useChat();
 
   const toggleSidebar = () => {
@@ -37,6 +41,10 @@ export default function ChatPage() {
         onNewChat={startNewChat}
         isOpen={isSidebarOpen}
         onToggleSidebar={toggleSidebar}
+        documents={documents}
+        onUploadFile={uploadFile}
+        isUploading={isUploading}
+        uploadError={uploadError}
       />
 
       {/* Main Conversation Window */}

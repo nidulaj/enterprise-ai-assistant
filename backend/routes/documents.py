@@ -35,7 +35,10 @@ document_bp = Blueprint(
     __name__
 )
 
-UPLOAD_FOLDER = "uploads"
+UPLOAD_FOLDER = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "uploads"
+)
 
 os.makedirs(
     UPLOAD_FOLDER,
@@ -297,3 +300,21 @@ def upload_document():
         ):
             print("DELETING TEMP FILE:", local_path)
             os.remove(local_path)
+
+
+@document_bp.route("/documents", methods=["GET"])
+def get_documents():
+    try:
+        response = (
+            supabase
+            .table("documents")
+            .select("*")
+            .order("uploaded_at", desc=True)
+            .execute()
+        )
+        return jsonify(response.data), 200
+    except Exception as e:
+        print("GET DOCUMENTS FAILED:", str(e))
+        return jsonify({
+            "error": str(e)
+        }), 500
