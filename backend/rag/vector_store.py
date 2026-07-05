@@ -1,11 +1,15 @@
+import os
 import chromadb
 from rag.embeddings import EmbeddingService
 
 class VectorStore:
     def __init__(self):
+        # Resolve to backend/chroma_db relative to this file
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        chroma_path = os.path.join(base_dir, "chroma_db")
 
         self.client = chromadb.PersistentClient(
-            path="./chroma_db"
+            path=chroma_path
         )
 
         self.collection = self.client.get_or_create_collection(

@@ -1,6 +1,6 @@
-import React from "react";
-import { ChatSession } from "@/types/chat";
-import { MessageSquare, Plus, Trash2, Bot, Menu, X } from "lucide-react";
+import React, { useRef } from "react";
+import { ChatSession, DocumentItem } from "@/types/chat";
+import { MessageSquare, Plus, Trash2, Bot, Menu, X, Upload, FileText } from "lucide-react";
 
 interface ChatSidebarProps {
   sessions: ChatSession[];
@@ -10,6 +10,10 @@ interface ChatSidebarProps {
   onNewChat: () => void;
   isOpen: boolean;
   onToggleSidebar: () => void;
+  documents: DocumentItem[];
+  onUploadFile: (file: File) => Promise<void>;
+  isUploading: boolean;
+  uploadError: string | null;
 }
 
 export const ChatSidebar: React.FC<ChatSidebarProps> = ({
@@ -20,7 +24,23 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   onNewChat,
   isOpen,
   onToggleSidebar,
+  documents,
+  onUploadFile,
+  isUploading,
+  uploadError,
 }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      onUploadFile(files[0]);
+    }
+  };
   return (
     <>
       {/* Mobile Drawer Backdrop */}
@@ -74,7 +94,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
         </div>
 
         {/* History List */}
-        <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1 scrollbar-thin">
+        <div className="flex-[3] overflow-y-auto px-3 py-2 space-y-1 scrollbar-thin border-b border-slate-800/80">
           <div className="px-3 py-1.5 text-xs font-semibold text-slate-500 tracking-wider uppercase">
             Recent Chats
           </div>
@@ -119,6 +139,79 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
               );
             })
           )}
+        </div>
+
+        {/* Knowledge Base Section */}
+        <div className="flex-[2] flex flex-col min-h-0 bg-slate-950/40">
+          <div className="flex items-center justify-between px-6 py-3 border-b border-slate-800/80 shrink-0">
+            <span className="text-xs font-semibold text-slate-500 tracking-wider uppercase">
+              Knowledge Base
+            </span>
+            <button
+              onClick={handleUploadClick}
+              disabled={isUploading}
+              className="text-slate-400 hover:text-white disabled:text-slate-600 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              title="Upload PDF Document"
+            >
+              <Upload size={14} className={isUploading ? "animate-pulse" : ""} />
+            </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept=".pdf"
+              className="hidden"
+            />
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1 scrollbar-thin">
+            {isUploading && (
+              <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-slate-900 border border-slate-800/60 text-xs text-indigo-400">
+                <span className="shrink-0 w-3.5 h-3.5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin"></span>
+                <span className="truncate text-[11px]">Indexing PDF...</span>
+              </div>
+            )}
+
+            {uploadError && (
+              <div className="px-3 py-2 rounded-xl bg-red-950/30 border border-red-900/40 text-[10px] text-red-400 leading-relaxed break-words">
+                {uploadError}
+              </div>
+            )}
+
+            {documents.length === 0 ? (
+              !isUploading && (
+                <div className="flex flex-col items-center justify-center py-6 text-center px-4">
+                  <FileText size={18} className="text-slate-800 mb-1" />
+                  <p className="text-[10px] text-slate-600">No documents uploaded</p>
+                </div>
+              )
+            ) : (
+              documents.map((doc) => (
+                <a
+                  key={doc.id}
+                  href={doc.file_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 rounded-xl px-3 py-2 text-slate-400 hover:bg-slate-900 hover:text-slate-200 transition-all select-none group"
+                >
+                  <FileText size={15} className="shrink-0 text-emerald-500/80 group-hover:text-emerald-400 transition-colors" />
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate text-xs text-slate-300 group-hover:text-white transition-colors">
+                      {doc.name}
+                    </p>
+                    <p className="text-[9px] text-slate-600">
+                      {new Date(doc.uploaded_at).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                </a>
+              ))
+            )}
+          </div>
         </div>
 
         {/* Sidebar Footer */}

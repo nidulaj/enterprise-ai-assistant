@@ -14,3 +14,10 @@ export interface ChatSession {
 }
 
 export type ModelOption = "auto" | "gemini" | "groq";
+
+export interface DocumentItem {
+  id: string;
+  name: string;
+  file_url: string;
+  uploaded_at: string;
+}

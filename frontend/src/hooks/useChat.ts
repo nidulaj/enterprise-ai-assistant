@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Message, ChatSession, ModelOption } from "@/types/chat";
-import { sendChatMessage } from "@/lib/api";
+import { Message, ChatSession, ModelOption, DocumentItem } from "@/types/chat";
+import { sendChatMessage, getDocuments, uploadDocument } from "@/lib/api";
 
 const LOCAL_STORAGE_KEY = "enterprise_ai_sessions";
 const MODEL_STORAGE_KEY = "enterprise_ai_model";
@@ -53,6 +53,43 @@ export const useChat = () => {
   const [selectedModel, setSelectedModel] = useState<ModelOption>("auto");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const fetchDocuments = async () => {
+    try {
+      const docs = await getDocuments();
+      setDocuments(docs);
+    } catch (err: any) {
+      console.error("Failed to fetch documents:", err);
+    }
+  };
+
+  const uploadFile = async (file: File) => {
+    if (!file) return;
+    setIsUploading(true);
+    setUploadError(null);
+    try {
+      await uploadDocument(file);
+      await fetchDocuments();
+    } catch (err: any) {
+      console.error("Upload failed:", err);
+      setUploadError(
+        err.response?.data?.error || 
+        err.message || 
+        "Failed to upload document."
+      );
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Fetch documents on mount
+  useEffect(() => {
+    fetchDocuments();
+  }, []);
 
   // Initialize chat sessions and model preference
   useEffect(() => {
@@ -199,9 +236,9 @@ export const useChat = () => {
       const assistantMessage: Message = {
         id: `msg-${Date.now() + 1}`,
         role: "assistant",
-        content: responseData.response,
+        content: responseData.answer.response,
         timestamp: new Date().toISOString(),
-        model: responseData.model,
+        model: responseData.answer.model,
       };
 
       const finalMessages = [...updatedMessages, assistantMessage];
@@ -235,5 +272,10 @@ export const useChat = () => {
     selectSession,
     deleteSession,
     sendMessage,
+    documents,
+    isUploading,
+    uploadError,
+    uploadFile,
+    fetchDocuments,
   };
 };
