@@ -17,6 +17,8 @@ class VectorStore:
         )
 
     def add_document(self, doc_id, chunks):
+        inserted = 0
+
         for index, chunk in enumerate(chunks):
             embedding = EmbeddingService.embed(chunk)
 
@@ -26,6 +28,10 @@ class VectorStore:
                 embeddings=[embedding],
                 metadatas=[{"document_id": doc_id}]
             )
+
+            inserted += 1
+
+        return inserted
 
     def search(self, query, n_results=5):
         query_embedding = EmbeddingService.embed(query)
