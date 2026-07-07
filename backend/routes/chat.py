@@ -52,8 +52,10 @@ def chat():
             
             return jsonify({
                 "source": "clickup",
-                "answer": answer,
-                "model": model
+                "answer": {
+                    "response": answer,
+                    "model": model
+                }
             })
             
         elif intent["intent"] == "CREATE_TASK":
@@ -63,10 +65,13 @@ def chat():
             
             return jsonify({
                 "source": "clickup",
-                "answer":
-                    f"Task created successfully.\n\n"
-                    f"Task: {task['name']}\n"
-                    f"Status: {task['status']}"
+                "answer": {
+                    "response":
+                        f"Task created successfully.\n\n"
+                        f"Task: {task['name']}\n"
+                        f"Status: {task['status']}",
+                    "model": model
+                }
             })
         
         elif intent["intent"] == "UPDATE_TASK_STATUS":
@@ -77,8 +82,10 @@ def chat():
             if not task:
                 return jsonify({
                     "source": "clickup",
-                    "answer":
-                        f"Task '{intent['task_name']}' not found."
+                    "answer": {
+                        "response": f"Task '{intent['task_name']}' not found.",
+                        "model": model
+                    }
                 })
             
             updated = clickup_service.update_task_status(
@@ -88,10 +95,13 @@ def chat():
             
             return jsonify({
                 "source": "clickup",
-                "answer":
-                    f"Task updated successfully.\n\n"
-                    f"Task: {updated['name']}\n"
-                    f"Status: {updated['status']}"
+                "answer": {
+                    "response":
+                        f"Task updated successfully.\n\n"
+                        f"Task: {updated['name']}\n"
+                        f"Status: {updated['status']}",
+                    "model": model
+                }
             })
         
     

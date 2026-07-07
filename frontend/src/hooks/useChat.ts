@@ -233,12 +233,20 @@ export const useChat = () => {
     try {
       const responseData = await sendChatMessage(content, selectedModel);
       
+      const answerContent = typeof responseData.answer === "string"
+        ? responseData.answer
+        : responseData.answer?.response || "";
+        
+      const answerModel = typeof responseData.answer === "string"
+        ? (responseData.model || selectedModel)
+        : responseData.answer?.model || selectedModel;
+
       const assistantMessage: Message = {
         id: `msg-${Date.now() + 1}`,
         role: "assistant",
-        content: responseData.answer.response,
+        content: answerContent,
         timestamp: new Date().toISOString(),
-        model: responseData.answer.model,
+        model: answerModel,
       };
 
       const finalMessages = [...updatedMessages, assistantMessage];

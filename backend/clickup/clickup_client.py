@@ -59,6 +59,10 @@ class ClickUpClient:
             "status": status
         }
         
+        print("\n========== CLICKUP UPDATE ==========")
+        print("URL:", url)
+        print("PAYLOAD:", payload)
+        
         response = requests.put(
             url,
             headers=self.headers,

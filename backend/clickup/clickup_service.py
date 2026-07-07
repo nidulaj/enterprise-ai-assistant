@@ -64,7 +64,7 @@ class ClickUpService:
             return None
         
         names = [
-            tasks["name"]
+            task["name"]
             for task in tasks
         ]
         
