@@ -46,6 +46,12 @@ For SHOW_TASKS:
     "intent":"SHOW_TASKS"
 }}
 
+For GENERATE_SPRINT_SUMMARY return:
+
+{{
+    "intent":"GENERATE_SPRINT_SUMMARY"
+}}
+
 If none match:
 
 {{

@@ -5,6 +5,7 @@ from services.ai_manager import AIManager
 from services.rag_service import RAGService
 from services.intent_service import IntentService
 from clickup.clickup_service import ClickUpService
+from services.sprint_service import SprintService
 
 chat_bp = Blueprint('chat', __name__)
 
@@ -12,6 +13,7 @@ ai_manager = AIManager()
 rag_service = RAGService()
 intent_service = IntentService()
 clickup_service = ClickUpService()
+sprint_service = SprintService()
 
 @chat_bp.route("/chat", methods=["POST"])
 def chat():
@@ -102,6 +104,17 @@ def chat():
                         f"Status: {updated['status']}",
                     "model": model
                 }
+            })
+            
+        elif intent["intent"] == "GENERATE_SPRINT_SUMMARY":
+            summary = sprint_service.generate_summary(
+                model=model
+            )
+            
+            return jsonify({
+                "source": "clickup",
+                "answer": summary,
+                "model": model
             })
         
     

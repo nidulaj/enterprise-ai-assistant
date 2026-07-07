@@ -25,7 +25,11 @@ class ClickUpClient:
     def get_tasks(self):
         url = f"{self.BASE_URL}/list/{self.list_id}/task"
         
-        response = requests.get(url, headers=self.headers)
+        params = {
+        "include_closed": "true"
+        }
+        
+        response = requests.get(url, headers=self.headers, params=params)
         response.raise_for_status()
         return response.json()
     
