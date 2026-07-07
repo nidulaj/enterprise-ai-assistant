@@ -247,6 +247,7 @@ export const useChat = () => {
         content: answerContent,
         timestamp: new Date().toISOString(),
         model: answerModel,
+        source: responseData.source,
       };
 
       const finalMessages = [...updatedMessages, assistantMessage];

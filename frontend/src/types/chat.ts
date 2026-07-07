@@ -4,6 +4,7 @@ export interface Message {
   content: string;
   timestamp: string; // ISO string representation
   model?: ModelOption;
+  source?: string;
 }
 
 export interface ChatSession {
