@@ -16,10 +16,13 @@ interface ChatRequest {
 
 interface ChatResponse {
   source: string;
-  answer: {
-    response: string;
-    model: ModelOption;
-  };
+  answer:
+    | string
+    | {
+        response: string;
+        model: ModelOption;
+      };
+  model?: ModelOption;
 }
 
 /**
