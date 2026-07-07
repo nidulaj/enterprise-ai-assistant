@@ -262,7 +262,25 @@ export const useChat = () => {
       saveSessions(finalSessions);
     } catch (err: any) {
       console.error(err);
-      setError(err.response?.data?.message || err.message || "Failed to fetch AI response. Please try again.");
+      const serverError = err.response?.data?.error || err.response?.data?.message;
+      if (
+        serverError &&
+        (serverError.includes("429") ||
+          serverError.toLowerCase().includes("quota") ||
+          serverError.toLowerCase().includes("rate limit") ||
+          serverError.toLowerCase().includes("limit exceeded") ||
+          serverError.toLowerCase().includes("exceeded your current quota"))
+      ) {
+        setError(
+          "Gemini API quota or rate limit exceeded. Please use the model selector at the bottom to switch to another model (such as Groq)."
+        );
+      } else {
+        setError(
+          serverError ||
+            err.message ||
+            "Failed to fetch AI response. Please try again."
+        );
+      }
     } finally {
       setIsLoading(false);
     }
