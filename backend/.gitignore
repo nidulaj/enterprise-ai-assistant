@@ -63,3 +63,4 @@ uploads/
 chroma_db/
 
 credentials.json
+token.json
