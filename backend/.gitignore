@@ -61,3 +61,5 @@ uploads/
 
 # ChromaDB
 chroma_db/
+
+credentials.json
