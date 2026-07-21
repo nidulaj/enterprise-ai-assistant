@@ -68,10 +68,11 @@ class CalendarService:
                 "timeZone": "Asia/Colombo",
             },
             "conferenceData": {
-            "createRequest": {
-                "requestId": str(datetime.datetime.now().timestamp())
+                "createRequest": {
+                    "requestId": str(datetime.datetime.now().timestamp()),
+                    "conferenceSolutionKey": {"type": "hangoutsMeet"}
+                }
             }
-        }
         }
         
         event = self.service.events().insert(
