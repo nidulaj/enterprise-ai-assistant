@@ -6,7 +6,7 @@ from routes.documents import document_bp
 from routes.google_calendar import calendar_bp
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}}, allow_headers="*", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
 app.register_blueprint(chat_bp)
 app.register_blueprint(document_bp)

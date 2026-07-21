@@ -1,19 +1,10 @@
 from flask import Blueprint, request, jsonify
 import traceback    
 
-from services.ai_manager import AIManager
-from services.rag_service import RAGService
-from services.intent_service import IntentService
-from clickup.clickup_service import ClickUpService
-from services.sprint_service import SprintService
+from agents.base.router_agent import RouterAgent
 
 chat_bp = Blueprint('chat', __name__)
-
-ai_manager = AIManager()
-rag_service = RAGService()
-intent_service = IntentService()
-clickup_service = ClickUpService()
-sprint_service = SprintService()
+agent_router = RouterAgent()
 
 @chat_bp.route("/chat", methods=["POST"])
 def chat():
@@ -29,117 +20,48 @@ def chat():
         }), 400
     
     try:
-        intent = intent_service.detect(
-            message=message,
-            model=model
-        )
+        response = agent_router.route(message=message, model=model)
         
-        print("Detected Intent:", intent)
+        source = response.source
+        response_text = response.response_text
         
-        if intent["intent"] == "SHOW_TASKS":
-            tasks = clickup_service.get_tasks()
-
-            print("TASKS:", tasks)
-
-            answer = "Your current tasks:\n\n"
-
-            for index, task in enumerate(tasks, start=1):
-                answer += (
-                    f"{index}. {task['name']} "
-                    f"({task['status']})\n"
-                )
-
-            print("ANSWER:")
-            print(answer)
-            
-            return jsonify({
-                "source": "clickup",
-                "answer": {
-                    "response": answer,
-                    "model": model
-                }
-            })
-            
-        elif intent["intent"] == "CREATE_TASK":
-            task = clickup_service.create_task(
-                title=intent["title"]
-            )
-            
-            return jsonify({
-                "source": "clickup",
-                "answer": {
-                    "response":
-                        f"Task created successfully.\n\n"
-                        f"Task: {task['name']}\n"
-                        f"Status: {task['status']}",
-                    "model": model
-                }
-            })
-        
-        elif intent["intent"] == "UPDATE_TASK_STATUS":
-            task = clickup_service.find_task_by_name(
-                intent["task_name"]
-            )
-            
-            if not task:
+        # Map source fields to adapt to the exact frontend contract
+        if source == "clickup":
+            # Sprint summary maps answer to string, while tasks map to {response, model} dict
+            if response.data and "summary" in response.data:
+                return jsonify({
+                    "source": "clickup",
+                    "answer": response_text,
+                    "model": response.model
+                })
+            else:
                 return jsonify({
                     "source": "clickup",
                     "answer": {
-                        "response": f"Task '{intent['task_name']}' not found.",
-                        "model": model
+                        "response": response_text,
+                        "model": response.model
                     }
                 })
-            
-            updated = clickup_service.update_task_status(
-                task_id=task["id"],
-                status=intent["status"]
-            )
-            
-            return jsonify({
-                "source": "clickup",
-                "answer": {
-                    "response":
-                        f"Task updated successfully.\n\n"
-                        f"Task: {updated['name']}\n"
-                        f"Status: {updated['status']}",
-                    "model": model
-                }
-            })
-            
-        elif intent["intent"] == "GENERATE_SPRINT_SUMMARY":
-            summary = sprint_service.generate_summary(
-                model=model
-            )
-            
-            return jsonify({
-                "source": "clickup",
-                "answer": summary,
-                "model": model
-            })
-        
-    
-        rag_answer = rag_service.answer_with_documents(
-            question=message,
-            model=model
-        )
-    
-        if rag_answer:
+        elif source == "documents":
             return jsonify({
                 "source": "documents",
-                "answer": rag_answer
+                "answer": response_text
             })
-    
-    
-        ai_answer  = ai_manager.generate(
-            prompt=message,
-            model=model
-        )
-
-        return jsonify({
-            "source": "ai",
-            "answer": ai_answer
-        })
-    
+        elif source == "ai":
+            return jsonify({
+                "source": "ai",
+                "answer": response_text
+            })
+        else:
+            # Fallback for calendar or other newly introduced agents
+            return jsonify({
+                "source": source,
+                "answer": {
+                    "response": response_text,
+                    "model": response.model
+                }
+            })
+        
     except Exception as e:
         print("\n========== ERROR ==========")
         print(type(e))

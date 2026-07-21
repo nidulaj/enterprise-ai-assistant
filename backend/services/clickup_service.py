@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-class ClickUpClient:
+class ClickUpService:
     BASE_URL = "https://api.clickup.com/api/v2"
     
     def __init__(self):
@@ -34,7 +34,7 @@ class ClickUpClient:
         return response.json()
     
     def get_task(self, task_id):
-        url = f"{self.BASE_URL}/tsk/{task_id}"
+        url = f"{self.BASE_URL}/task/{task_id}"
         
         response = requests.get(url, headers=self.headers)
         response.raise_for_status()

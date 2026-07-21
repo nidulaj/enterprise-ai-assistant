@@ -1,5 +1,5 @@
 from rag.retriever import Retriever
-from services.ai_manager import AIManager
+from services.llm.ai_manager import AIManager
 
 
 class RAGService:
@@ -21,22 +21,15 @@ class RAGService:
 
         context = "\n\n".join(chunks)
 
-        prompt = f"""
-Use ONLY the context below to answer the question.
-
-If the answer is not present in the context, say:
-"I could not find that information in the uploaded documents."
-
-Context:
-{context}
-
-Question:
-{question}
-"""
+        from agents.knowledge.prompts import RAG_QA_PROMPT
+        prompt = RAG_QA_PROMPT.format(context=context, question=question)
 
         response = self.ai_manager.generate(
             prompt=prompt,
             model=model
         )
+
+        if isinstance(response, dict):
+            return response.get("response", "")
 
         return response
