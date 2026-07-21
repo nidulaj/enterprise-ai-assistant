@@ -1,12 +1,14 @@
 import datetime
+import os
 import os.path
 
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-SCOPES =[
+SCOPES = [
     "https://www.googleapis.com/auth/calendar"
 ]
 
@@ -18,22 +20,34 @@ class CalendarService:
         creds = None
 
         if os.path.exists("token.json"):
-            creds = Credentials.from_authorized_user_file(
-                "token.json",
-                SCOPES
-            )
+            try:
+                creds = Credentials.from_authorized_user_file(
+                    "token.json",
+                    SCOPES
+                )
+            except Exception:
+                creds = None
 
         if not creds or not creds.valid:
-
             if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
+                try:
+                    creds.refresh(Request())
+                except (RefreshError, Exception) as e:
+                    print(f"Token refresh failed ({e}). Removing invalid token.json...")
+                    creds = None
+                    if os.path.exists("token.json"):
+                        try:
+                            os.remove("token.json")
+                        except OSError:
+                            pass
 
-            else:
+            if not creds:
+                if not os.path.exists("credentials.json"):
+                    raise FileNotFoundError("credentials.json file not found for Google Calendar authentication.")
                 flow = InstalledAppFlow.from_client_secrets_file(
                     "credentials.json",
                     SCOPES
                 )
-
                 creds = flow.run_local_server(port=0)
 
             with open("token.json", "w") as token:
@@ -53,6 +67,11 @@ class CalendarService:
                 "dateTime": end_time,
                 "timeZone": "Asia/Colombo",
             },
+            "conferenceData": {
+            "createRequest": {
+                "requestId": str(datetime.datetime.now().timestamp())
+            }
+        }
         }
         
         event = self.service.events().insert(
@@ -62,15 +81,13 @@ class CalendarService:
         ).execute()
         
         meet_link = None
+        conference = event.get("conferenceData")
         
-        if "conferenceData" in event:
-            meet_link = event[
-                "conferenceData"
-            ][
-                "entryPoints"
-            ][0][
-                "uri"
-            ]
+        if conference:
+            for entry in conference.get("entryPoints",[]):
+                if entry.get("entryPointType") == "video":
+                    meet_link = entry.get("uri")
+                    break
             
         return{
             "summary": event["summary"],

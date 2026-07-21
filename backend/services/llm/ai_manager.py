@@ -1,12 +1,12 @@
-from providers.gemini_provider import GeminiProvider
-from providers.groq_provider import GroqProvider
+from services.llm.gemini_provider import GeminiProvider
+from services.llm.groq_provider import GroqProvider
 
 class AIManager:
     def __init__(self):
         self.gemini = GeminiProvider()
         self.groq = GroqProvider()
 
-    def generate(self, prompt:str, model: str = "auto"):
+    def generate(self, prompt: str, model: str = "auto"):
         """Returns: {
             "response": "...",
             "model": "gemini"

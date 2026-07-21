@@ -1,5 +1,5 @@
-from clickup.clickup_service import ClickUpService
-from services.ai_manager import AIManager
+from services.clickup_service import ClickUpService
+from services.llm.ai_manager import AIManager
 
 
 class SprintService:
@@ -24,37 +24,8 @@ class SprintService:
                 f"(Status: {task['status']})\n"
             )
 
-        prompt = f"""
-You are an Agile Scrum assistant.
-
-Below are the current sprint tasks.
-
-Tasks:
-
-{task_text}
-
-Generate a professional sprint summary.
-
-Requirements:
-
-1. Group tasks into:
-
-Completed
-
-In Progress
-
-Pending
-
-2. Count the tasks.
-
-3. Mention overall sprint progress.
-
-4. Mention risks if there are many pending tasks.
-
-5. Keep the response concise.
-
-Use markdown.
-"""
+        from agents.clickup.prompts import SPRINT_SUMMARY_PROMPT
+        prompt = SPRINT_SUMMARY_PROMPT.format(task_text=task_text)
 
         response = self.ai.generate(
             prompt=prompt,
