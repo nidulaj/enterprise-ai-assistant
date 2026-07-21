@@ -12,11 +12,22 @@ from agents.knowledge.tools import (
 class KnowledgeAgent(BaseAgent):
     name = "knowledge"
     description = "Handles document search, questions about uploaded documents (RAG), and lists uploaded files."
-    capabilities = [
-        "Search uploaded PDF documents",
-        "Answer questions using company knowledge base (RAG)",
-        "List uploaded document files and metadata"
-    ]
+    @property
+    def capabilities(self) -> list[str]:
+        doc_names = []
+        try:
+            docs = self.tools_registry.execute_tool("get_documents")
+            if isinstance(docs, list):
+                doc_names = [d.get("name") for d in docs if isinstance(d, dict) and d.get("name")]
+        except Exception:
+            pass
+
+        available_str = f" (Uploaded files: {', '.join(doc_names)})" if doc_names else ""
+        return [
+            f"Search uploaded PDF documents and company policies{available_str}",
+            "Answer questions about uploaded PDF files using company knowledge base (RAG)",
+            "List uploaded document files and metadata"
+        ]
 
     def register_tools(self) -> None:
         self.tools_registry.register(Tool(
@@ -40,22 +51,29 @@ class KnowledgeAgent(BaseAgent):
     def execute(self, request: AgentRequest, context: Optional[AgentContext] = None) -> AgentResponse:
         payload = request.payload or {}
         action = payload.get("action")
+        msg_lower = request.message.lower()
 
         if action == "search_documents":
             query = payload.get("query") or request.message
             result = self.tools_registry.execute_tool("search_documents", query=query)
             return AgentResponse(
-                source=self.name,
+                source="documents",
                 response_text="Search completed.",
                 data=result if isinstance(result, dict) else {"result": result},
                 model=request.model
             )
 
-        elif action == "get_documents":
+        elif action == "get_documents" or "what document" in msg_lower or "list document" in msg_lower or "uploaded document" in msg_lower or "available document" in msg_lower or "which document" in msg_lower:
             docs = self.tools_registry.execute_tool("get_documents")
+            if isinstance(docs, list) and len(docs) > 0:
+                doc_list_str = "\n".join([f"{idx}. {d.get('name')}" for idx, d in enumerate(docs, start=1) if isinstance(d, dict)])
+                resp_text = f"Here are the documents currently uploaded in the system:\n\n{doc_list_str}"
+            else:
+                resp_text = "No documents have been uploaded to the system yet."
+
             return AgentResponse(
-                source=self.name,
-                response_text="Documents list retrieved.",
+                source="documents",
+                response_text=resp_text,
                 data={"documents": docs},
                 model=request.model
             )
