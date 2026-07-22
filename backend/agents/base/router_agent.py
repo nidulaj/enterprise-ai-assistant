@@ -11,6 +11,7 @@ from services.llm.ai_manager import AIManager
 from agents.clickup.agent import ClickUpAgent
 from agents.calendar.agent import CalendarAgent
 from agents.knowledge.agent import KnowledgeAgent
+from agents.email.agent import EmailAgent
 
 
 class RouterAgent:
@@ -27,6 +28,7 @@ class RouterAgent:
         self.registry.register(ClickUpAgent(tool_registry=self.tool_registry))
         self.registry.register(CalendarAgent(tool_registry=self.tool_registry))
         self.registry.register(KnowledgeAgent(tool_registry=self.tool_registry))
+        self.registry.register(EmailAgent(tool_registry=self.tool_registry))
 
     def route(self, message: str, model: str = "auto") -> AgentResponse:
         """
@@ -50,7 +52,7 @@ User Request:
 
 Rules:
 1. Return ONLY a valid JSON object. No Markdown block, no extra text.
-2. Select an agent name from the manifest ("clickup", "calendar", "knowledge") if the request matches its capabilities.
+2. Select an agent name from the manifest ("clickup", "calendar", "Email", "knowledge") if the request matches its capabilities.
 3. If the request does NOT match any agent's specialized capabilities, set "selected_agent" to "ai".
 4. Extract relevant parameters into "payload" (e.g. title, status, task_name, summary, start_time, end_time, query).
 
