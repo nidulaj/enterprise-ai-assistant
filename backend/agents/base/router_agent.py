@@ -52,7 +52,7 @@ User Request:
 
 Rules:
 1. Return ONLY a valid JSON object. No Markdown block, no extra text.
-2. Select an agent name from the manifest ("clickup", "calendar", "Email", "knowledge") if the request matches its capabilities.
+2. Select an agent name from the manifest ("clickup", "calendar", "email", "knowledge") if the request matches its capabilities.
 3. If the request does NOT match any agent's specialized capabilities, set "selected_agent" to "ai".
 4. Extract relevant parameters into "payload" (e.g. title, status, task_name, summary, start_time, end_time, query).
 
@@ -73,6 +73,8 @@ JSON Format:
             parsed = json.loads(cleaned_text)
 
             selected_agent_name = parsed.get("selected_agent", "ai")
+            if isinstance(selected_agent_name, str):
+                selected_agent_name = selected_agent_name.lower()
             action = parsed.get("action")
             payload = parsed.get("payload") or {}
 
