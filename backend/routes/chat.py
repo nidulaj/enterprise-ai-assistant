@@ -50,7 +50,8 @@ def chat():
         elif source == "ai":
             return jsonify({
                 "source": "ai",
-                "answer": response_text
+                "answer": response_text,
+                "model": response.model
             })
         else:
             # Fallback for calendar or other newly introduced agents

@@ -118,7 +118,13 @@ JSON Format:
         """Fallback helper for general conversational LLM requests."""
         ai_res = self.ai_manager.generate(prompt=message, model=model)
         resp_text = ai_res.get("response", "") if isinstance(ai_res, dict) else str(ai_res)
-        model_used = ai_res.get("model", "gemini") if isinstance(ai_res, dict) else "gemini"
+        
+        # Resolve the model actually used, defaulting to user selection before 'gemini' fallback
+        model_used = "gemini"
+        if isinstance(ai_res, dict) and ai_res.get("model"):
+            model_used = ai_res.get("model")
+        elif model and model != "auto":
+            model_used = model
 
         return AgentResponse(
             source="ai",
