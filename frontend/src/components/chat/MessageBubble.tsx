@@ -178,6 +178,20 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         color: "bg-amber-50 text-amber-700 border-amber-200/50"
       };
     }
+    if (source === "email") {
+      return {
+        text: "Email Agent",
+        emoji: "✉️",
+        color: "bg-blue-50 text-blue-700 border-blue-200/50"
+      };
+    }
+    if (source === "calendar") {
+      return {
+        text: "Calendar Agent",
+        emoji: "📅",
+        color: "bg-teal-50 text-teal-700 border-teal-200/50"
+      };
+    }
     return {
       text: "AI Assistant",
       emoji: "🤖",
