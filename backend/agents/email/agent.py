@@ -34,10 +34,26 @@ class EmailAgent(BaseAgent):
         
     def execute(self, request: AgentRequest, context: Optional[AgentContext] = None) -> AgentResponse:
         payload = request.payload or {}
+        print("payload:", payload)
         
         to_email = payload.get("to_email") or payload.get("to") or payload.get("recipient")
         subject = payload.get("subject") or payload.get("title") or "No Subject"
-        body = payload.get("body") or payload.get("content") or payload.get("message") or ""
+        body = payload.get("body") or payload.get("content") or payload.get("message") or payload.get("text")
+        
+        # If 'body' was not provided, construct it dynamically from meeting parameters if present
+        if not body:
+            meeting_summary = payload.get("meeting_summary") or payload.get("summary") or "Meeting"
+            meeting_link = payload.get("meeting_link") or payload.get("meet_link") or payload.get("link") or ""
+            start_time = payload.get("meeting_start_time") or payload.get("start_time") or ""
+            end_time = payload.get("meeting_end_time") or payload.get("end_time") or ""
+            
+            body_lines = [f"Here are the details for '{meeting_summary}':\n"]
+            if start_time:
+                body_lines.append(f"Time: {start_time}" + (f" to {end_time}" if end_time else ""))
+            if meeting_link:
+                body_lines.append(f"Meeting Link: {meeting_link}")
+            
+            body = "\n".join(body_lines) if len(body_lines) > 1 else request.message
         
         if not to_email:
             return AgentResponse(
