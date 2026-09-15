@@ -23,15 +23,22 @@ class AgentRegistry:
 
     def get_manifest(self) -> List[Dict[str, Any]]:
         """
-        Build and return a capability manifest of all registered agents
-        used by RouterAgent for capability-based routing prompts.
+        Build and return a comprehensive manifest of all registered agents,
+        their capabilities, and their registered executable tools with parameters.
+        Used by RouterAgent for capability-based planning and structured tool selection.
         """
         manifest = []
         for agent in self._agents.values():
+            tools_list = []
+            if hasattr(agent, "tools_registry") and agent.tools_registry:
+                agent_tools = agent.tools_registry.get_tools_by_agent(agent.name)
+                tools_list = [tool.get_schema() for tool in agent_tools]
+
             manifest.append({
-                "name": agent.name,
+                "agent": agent.name,
                 "description": agent.description,
-                "capabilities": agent.capabilities
+                "capabilities": agent.capabilities,
+                "tools": tools_list
             })
         return manifest
 

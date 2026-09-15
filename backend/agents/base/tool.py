@@ -1,16 +1,46 @@
+import inspect
 from typing import Callable, Any, Optional, List, Dict
 from pydantic import BaseModel, Field
+
+def extract_callable_parameters(func: Callable[..., Any]) -> List[str]:
+    """Dynamically inspect a callable to extract argument names."""
+    try:
+        sig = inspect.signature(func)
+        return [
+            p.name for p in sig.parameters.values()
+            if p.name not in ("self", "cls") and p.kind in (
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.KEYWORD_ONLY
+            )
+        ]
+    except Exception:
+        return []
 
 class Tool(BaseModel):
     """
     Standardized tool wrapper containing function callable, metadata descriptions,
-    and agent ownership attributes.
+    parameter schemas, and agent ownership attributes.
     """
     name: str = Field(description="Unique identifier name of the tool.")
     description: str = Field(description="Detailed description of tool capability for planners and routers.")
     func: Callable[..., Any] = Field(description="Python executable function implementation.")
+    parameters: Optional[List[str]] = Field(default=None, description="Explicit parameter names accepted by the tool.")
     args_schema: Optional[Any] = Field(default=None, description="Pydantic parameter validation model.")
     agent_name: Optional[str] = Field(default=None, description="Owner agent name registered with this tool.")
+
+    def get_parameters(self) -> List[str]:
+        """Return parameters list either explicitly provided or dynamically inspected."""
+        if self.parameters is not None:
+            return self.parameters
+        return extract_callable_parameters(self.func)
+
+    def get_schema(self) -> Dict[str, Any]:
+        """Export clean structured metadata for planner models."""
+        return {
+            "action": self.name,
+            "description": self.description,
+            "parameters": self.get_parameters()
+        }
 
 class ToolRegistry:
     """
@@ -47,11 +77,5 @@ class ToolRegistry:
 
     def get_manifest(self) -> List[Dict[str, Any]]:
         """Export tool descriptions as a structured manifest for Planner agents."""
-        manifest = []
-        for tool in self._tools.values():
-            manifest.append({
-                "name": tool.name,
-                "description": tool.description,
-                "agent_name": tool.agent_name
-            })
-        return manifest
+        return [tool.get_schema() for tool in self._tools.values()]
+

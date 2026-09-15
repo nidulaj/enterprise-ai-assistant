@@ -62,42 +62,49 @@ class ClickUpAgent(BaseAgent):
 
     def execute(self, request: AgentRequest, context: Optional[AgentContext] = None) -> AgentResponse:
         payload = request.payload or {}
-        action = payload.get("action") or request.intent or ""
+        action = payload.get("action")
         msg_lower = request.message.lower()
 
-        # Determine action if not explicitly specified in payload
-        if not action:
-            if "sprint" in msg_lower or "summary" in msg_lower:
-                action = "GENERATE_SPRINT_SUMMARY"
-            elif "create" in msg_lower or "add task" in msg_lower or "new task" in msg_lower:
-                action = "CREATE_TASK"
-            elif "update" in msg_lower or "change status" in msg_lower or "move to" in msg_lower or "mark as" in msg_lower:
-                action = "UPDATE_TASK_STATUS"
+        # 1. Dynamically resolve tool from action or message hint
+        tool = self.resolve_tool(action_name=action, message_hint=request.message)
+
+        # 2. Fallback heuristic if resolution was ambiguous
+        if not tool:
+            if any(k in msg_lower for k in ["create", "add task", "new task"]):
+                tool = self.tools_registry.get("create_task")
+            elif any(k in msg_lower for k in ["update", "status", "change status", "move to", "mark as"]):
+                tool = self.tools_registry.get("update_task_status")
+            elif any(k in msg_lower for k in ["summary", "sprint summary", "summarize"]):
+                tool = self.tools_registry.get("generate_sprint_summary")
             else:
-                action = "SHOW_TASKS"
+                tool = self.tools_registry.get("get_tasks")
 
-        if action in ["SHOW_TASKS", "get_tasks"]:
-            tasks = self.tools_registry.execute_tool("get_tasks")
-            answer = "Your current tasks:\n\n"
-            for index, task in enumerate(tasks, start=1):
-                answer += f"{index}. {task['name']} ({task['status']})\n"
-                
-            return AgentResponse(
-                source=self.name,
-                response_text=answer,
-                data={"tasks": tasks},
-                model=request.model
-            )
+        tool_name = tool.name if tool else "get_tasks"
 
-        elif action in ["CREATE_TASK", "create_task"]:
-            title = payload.get("title") or payload.get("task_name") or request.message
+        # 3. Dynamic execution with formatted response contracts
+        if tool_name == "create_task":
+            # Extract title flexibly
+            title = payload.get("title") or payload.get("task_name") or payload.get("name") or payload.get("task")
+            if not title:
+                # Clean prefix from message if title wasn't extracted
+                cleaned_msg = request.message.strip()
+                for prefix in [
+                    "create a task called ", "create task called ", "create a new task called ",
+                    "create new task called ", "add a task called ", "add task called ",
+                    "create a task ", "create task ", "create new task ", "add a task ", "add task "
+                ]:
+                    if cleaned_msg.lower().startswith(prefix):
+                        cleaned_msg = cleaned_msg[len(prefix):].strip(" '\"")
+                        break
+                title = cleaned_msg or "New Task"
+
             description = payload.get("description", "")
-            task = self.tools_registry.execute_tool("create_task", title=title, description=description)
+            task = self.execute_dynamic_tool("create_task", {"title": title, "description": description})
             
             answer = (
                 f"Task created successfully.\n\n"
-                f"Task: {task['name']}\n"
-                f"Status: {task['status']}"
+                f"Task: {task.get('name')}\n"
+                f"Status: {task.get('status')}"
             )
             return AgentResponse(
                 source=self.name,
@@ -106,33 +113,37 @@ class ClickUpAgent(BaseAgent):
                 model=request.model
             )
 
-        elif action in ["UPDATE_TASK_STATUS", "update_task_status"]:
-            task_name = payload.get("task_name") or request.message
-            status = payload.get("status") or "complete"
+        elif tool_name == "update_task_status":
+            task_name = payload.get("task_name") or payload.get("title") or payload.get("task") or payload.get("name") or request.message
+            status = payload.get("status") or payload.get("new_status") or "complete"
             
-            task = self.tools_registry.execute_tool("find_task_by_name", task_name=task_name)
-            if not task:
+            result = self.execute_dynamic_tool("update_task_status", {
+                "task_name": task_name,
+                "status": status
+            })
+
+            if isinstance(result, dict) and "error" in result:
                 return AgentResponse(
                     source=self.name,
-                    response_text=f"Task '{task_name}' not found.",
+                    response_text=result["error"],
+                    data=result,
                     model=request.model
                 )
 
-            updated = self.tools_registry.execute_tool("update_task_status", task_id=task["id"], status=status)
             answer = (
                 f"Task updated successfully.\n\n"
-                f"Task: {updated['name']}\n"
-                f"Status: {updated['status']}"
+                f"Task: {result.get('name')}\n"
+                f"Status: {result.get('status')}"
             )
             return AgentResponse(
                 source=self.name,
                 response_text=answer,
-                data={"task": updated},
+                data={"task": result},
                 model=request.model
             )
 
-        elif action in ["GENERATE_SPRINT_SUMMARY", "generate_sprint_summary"]:
-            summary = self.tools_registry.execute_tool("generate_sprint_summary", model=request.model)
+        elif tool_name == "generate_sprint_summary":
+            summary = self.execute_dynamic_tool("generate_sprint_summary", {"model": request.model})
             return AgentResponse(
                 source=self.name,
                 response_text=summary,
@@ -140,9 +151,8 @@ class ClickUpAgent(BaseAgent):
                 model=request.model
             )
 
-        else:
-            # Default action for ClickUp queries
-            tasks = self.tools_registry.execute_tool("get_tasks")
+        elif tool_name == "get_tasks":
+            tasks = self.execute_dynamic_tool("get_tasks")
             answer = "Your current tasks:\n\n"
             for index, task in enumerate(tasks, start=1):
                 answer += f"{index}. {task['name']} ({task['status']})\n"
@@ -151,5 +161,15 @@ class ClickUpAgent(BaseAgent):
                 source=self.name,
                 response_text=answer,
                 data={"tasks": tasks},
+                model=request.model
+            )
+
+        else:
+            # Fallback for any other dynamically registered tool
+            result = self.execute_dynamic_tool(tool_name, payload)
+            return AgentResponse(
+                source=self.name,
+                response_text=str(result),
+                data={"result": result} if isinstance(result, dict) else {"data": result},
                 model=request.model
             )

@@ -55,8 +55,10 @@ Rules:
 1. Return ONLY a valid JSON object. No Markdown blocks, no extra text.
 2. If the request requires multiple steps or agents (e.g. create a meeting AND send an email invitation, or fetch tasks AND email summary), break it down into sequential execution steps under "plan".
 3. For single-agent requests, provide a single step in the "plan" array.
-4. If no specialized domain agent matches the request, set "selected_agent" to "ai".
-5. In step payloads, extract parameters. For email steps, ALWAYS include a "body" field containing the complete email text and reference previous step outputs using placeholders like "{{step_1.meet_link}}" or "{{meeting_details.meet_link}}".
+4. For each step, set "selected_agent" to the matching agent name, and set "action" to the exact tool "action" name declared under that agent's "tools" in the manifest.
+5. In step "payload", extract parameters declared for that tool.
+6. If no specialized domain agent matches the request, set "selected_agent" to "ai" and "action" to "general_chat".
+7. For email steps, ALWAYS include a "body" field containing the complete email text and reference previous step outputs using placeholders like "{{step_1.meet_link}}" or "{{meeting_details.meet_link}}".
 
 JSON Schema:
 {{
@@ -65,7 +67,7 @@ JSON Schema:
         {{
             "step_id": 1,
             "selected_agent": "<agent_name>",
-            "action": "<action_name>",
+            "action": "<action_name from agent's tools>",
             "payload": {{}},
             "output_key": "step_1"
         }}
