@@ -1,9 +1,9 @@
 import React from "react";
 import { Message } from "@/types/chat";
-import { Bot, User, Copy, Check } from "lucide-react";
+import { Bot, User, Copy, Check, Loader2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import ThoughtStream from "./ThoughtStream";
+import ThoughtStream, { ActiveExecutionBanner } from "./ThoughtStream";
 
 
 interface CodeBlockProps {
@@ -65,6 +65,11 @@ interface MessageBubbleProps {
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const isAssistant = message.role === "assistant";
+  const hasSteps = Boolean(message.thoughtSteps && message.thoughtSteps.length > 0);
+  const runningStep = message.thoughtSteps?.find((s) => s.status === "running");
+  const nextStep = message.thoughtSteps?.find((s) => s.status === "pending");
+  const completedCount = message.thoughtSteps?.filter((s) => s.status === "completed").length || 0;
+  const totalSteps = message.thoughtSteps?.length || 0;
 
   const components = React.useMemo(() => {
     return {
@@ -226,9 +231,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
         </div>
 
         {/* Message Content Container */}
-        <div className={`flex flex-col max-w-[85%] ${!isAssistant ? "items-end" : "items-start"}`}>
+        <div className={`flex flex-col ${!isAssistant ? "max-w-[85%] items-end" : "w-full min-w-0 items-start"}`}>
           {/* Sender Role Label */}
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
             <span className="text-xs font-semibold text-slate-500">
               {isAssistant ? "Enterprise AI" : "You"}
             </span>
@@ -253,37 +258,67 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             </span>
           </div>
 
-          {/* Render Thought Stream if steps are present */}
-          {isAssistant && message.thoughtSteps && message.thoughtSteps.length > 0 && (
-            <ThoughtStream
-              steps={message.thoughtSteps}
-              isStreaming={message.isStreaming}
-            />
-          )}
-
-          {/* Actual Bubble Text */}
-          {(message.content || !message.isStreaming) && (
-            <div
-              className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                isAssistant
-                  ? "bg-white text-slate-800 border border-slate-100 shadow-sm"
-                  : "bg-slate-900 text-slate-50 shadow-md"
-              }`}
-            >
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-                {message.content}
-              </ReactMarkdown>
-              {message.isStreaming && (
-                <span className="inline-block w-1.5 h-4 ml-1 bg-indigo-600 animate-pulse align-middle rounded-sm" />
-              )}
+          {/* User Message Bubble */}
+          {!isAssistant && (
+            <div className="rounded-2xl px-4 py-3 text-sm leading-relaxed bg-slate-900 text-slate-50 shadow-md">
+              {message.content}
             </div>
           )}
 
-          {/* If streaming with no content yet and no thought steps, show initializing status */}
-          {message.isStreaming && !message.content && (!message.thoughtSteps || message.thoughtSteps.length === 0) && (
-            <div className="bg-white border border-slate-100 shadow-sm rounded-2xl px-4 py-3 text-xs text-slate-500 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-indigo-600 animate-ping" />
-              <span>Supervisor analyzing query and preparing agent plan...</span>
+          {/* Assistant Unified Message Container (Plan + Output in ONE container like ChatGPT / Antigravity) */}
+          {isAssistant && (
+            <div className="w-full rounded-2xl bg-white text-slate-800 border border-slate-200/80 shadow-sm px-4 sm:px-5 py-3.5 sm:py-4 text-sm leading-relaxed">
+              {/* 1. Integrated Thought / Plan Stream at top */}
+              {hasSteps && (
+                <div className={message.content || message.isStreaming ? "mb-3 pb-3 border-b border-slate-100" : ""}>
+                  <ThoughtStream
+                    steps={message.thoughtSteps!}
+                    isStreaming={message.isStreaming}
+                  />
+                </div>
+              )}
+
+              {/* 2. Initial state if streaming with no content & no plan yet (Supervisor planning) */}
+              {message.isStreaming && !message.content && !hasSteps && (
+                <div className="flex items-center gap-2.5 text-xs text-slate-600 py-1.5 animate-fadeIn">
+                  <Loader2 size={13} className="animate-spin text-indigo-600 shrink-0" />
+                  <span className="font-medium text-slate-700">Supervisor is planning execution...</span>
+                </div>
+              )}
+
+              {/* 3. If streaming with plan created, but first agent output has not arrived yet */}
+              {message.isStreaming && !message.content && hasSteps && (
+                <ActiveExecutionBanner
+                  runningStep={runningStep}
+                  nextStep={nextStep}
+                  completedCount={completedCount}
+                  totalSteps={totalSteps}
+                />
+              )}
+
+              {/* 4. Output Markdown Text directly below in the same container */}
+              {message.content && (
+                <div>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+                    {message.content}
+                  </ReactMarkdown>
+
+                  {/* Show what is currently executing & next step right after output instead of lone "|" */}
+                  {message.isStreaming && hasSteps && (runningStep || nextStep) && (
+                    <ActiveExecutionBanner
+                      runningStep={runningStep}
+                      nextStep={nextStep}
+                      completedCount={completedCount}
+                      totalSteps={totalSteps}
+                    />
+                  )}
+
+                  {/* Standard text cursor only when actively streaming pure text without an executing agent */}
+                  {message.isStreaming && (!hasSteps || (!runningStep && !nextStep)) && (
+                    <span className="inline-block w-1.5 h-4 ml-1 bg-indigo-600 animate-pulse align-middle rounded-sm" />
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

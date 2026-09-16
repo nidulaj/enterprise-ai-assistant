@@ -59,6 +59,7 @@ Rules:
 5. In step "payload", extract parameters declared for that tool.
 6. If no specialized domain agent matches the request, set "selected_agent" to "ai" and "action" to "general_chat".
 7. For email steps, ALWAYS include a "body" field containing the complete email text and reference previous step outputs using placeholders like "{{step_1.meet_link}}" or "{{meeting_details.meet_link}}".
+8. For each step, ALWAYS include a "description" field containing a concise, natural, user-friendly explanation of what this step is doing (e.g. "Fetching active sprint tasks from ClickUp", "Scheduling 1-hour Sprint Review on Google Calendar", "Sending invitation email").
 
 JSON Schema:
 {{
@@ -68,6 +69,7 @@ JSON Schema:
             "step_id": 1,
             "selected_agent": "<agent_name>",
             "action": "<action_name from agent's tools>",
+            "description": "<natural human-readable explanation of this step>",
             "payload": {{}},
             "output_key": "step_1"
         }}
@@ -273,69 +275,48 @@ JSON Schema:
             model=model_used
         )
 
-    def _get_step_label(self, agent_name: str, action: Optional[str], payload: Dict[str, Any]) -> str:
-        agent_name = (agent_name or "ai").lower()
-        action = (action or "").lower()
+    def _get_step_label(self, agent_name: str, action: Optional[str], step_info: Dict[str, Any]) -> str:
+        """Dynamically resolves a clean, concise action name for the step."""
+        if action and action != "general_chat":
+            return action.replace("_", " ").title()
 
-        if agent_name == "clickup":
-            if "create" in action:
-                task_name = payload.get("title") or payload.get("task_name") or payload.get("name") or "new task"
-                return f"Creating ClickUp task: '{task_name}'"
-            elif "update" in action:
-                return "Updating ClickUp task status"
-            elif "summary" in action:
-                return "Generating sprint progress summary"
-            else:
-                return "Fetching tasks from ClickUp workspace"
+        desc = step_info.get("description") or step_info.get("label") or step_info.get("thought")
+        if desc and isinstance(desc, str) and len(desc.strip()) < 35:
+            return desc.strip()
 
-        elif agent_name == "calendar":
-            summary = payload.get("summary") or payload.get("title") or "Meeting"
-            return f"Scheduling calendar event: '{summary}'"
+        agent_clean = (agent_name or "AI").capitalize()
+        action_clean = (action or "process").replace("_", " ").title()
+        return f"{agent_clean}: {action_clean}"
 
-        elif agent_name == "email":
-            to = payload.get("to_email") or payload.get("to") or payload.get("recipient") or "team"
-            return f"Composing and sending email to {to}"
-
-        elif agent_name == "knowledge":
-            if "search" in action:
-                return "Searching indexed documents for context"
-            elif "get_documents" in action:
-                return "Listing available documents in knowledge base"
-            else:
-                return "Analyzing documents and synthesizing answer"
-
-        elif agent_name == "ai":
-            return "Formulating response with AI"
-
-        return f"Executing {agent_name} {action}".strip()
 
     def _get_step_summary(self, agent_name: str, action: Optional[str], step_output: Dict[str, Any], response_text: str) -> str:
-        agent_name = (agent_name or "ai").lower()
-        if agent_name == "clickup":
-            if "task" in step_output and isinstance(step_output["task"], dict):
-                t = step_output["task"]
-                return f"Created task '{t.get('name', 'Task')}' ({t.get('status', 'open')})"
-            elif "tasks" in step_output and isinstance(step_output["tasks"], list):
-                return f"Retrieved {len(step_output['tasks'])} tasks from workspace"
-            elif "summary" in step_output:
-                return "Synthesized sprint summary"
-            return "ClickUp action completed"
+        """Dynamically extracts a concise outcome summary from step output without hardcoding."""
+        if not isinstance(step_output, dict):
+            return response_text[:80] + ("..." if len(response_text) > 80 else "")
 
-        elif agent_name == "calendar":
-            meet_link = step_output.get("meet_link")
-            if meet_link:
-                return f"Event scheduled. Meet link: {meet_link}"
-            return "Calendar event created successfully"
+        if "summary" in step_output and isinstance(step_output["summary"], str):
+            return step_output["summary"][:90]
 
-        elif agent_name == "email":
-            return "Email sent successfully"
+        if "message" in step_output and isinstance(step_output["message"], str):
+            return step_output["message"]
 
-        elif agent_name == "knowledge":
-            if "documents" in step_output and isinstance(step_output["documents"], list):
-                return f"Found {len(step_output['documents'])} documents"
-            return "Document search and analysis completed"
+        if "meet_link" in step_output and step_output["meet_link"]:
+            return f"Event scheduled. Link: {step_output['meet_link']}"
 
-        return response_text[:80] + ("..." if len(response_text) > 80 else "")
+        if "tasks" in step_output and isinstance(step_output["tasks"], list):
+            return f"Retrieved {len(step_output['tasks'])} items"
+
+        if "task" in step_output and isinstance(step_output["task"], dict):
+            task_name = step_output["task"].get("name", "Task")
+            task_status = step_output["task"].get("status", "created")
+            return f"Task '{task_name}' ({task_status})"
+
+        if "documents" in step_output and isinstance(step_output["documents"], list):
+            return f"Retrieved {len(step_output['documents'])} documents"
+
+        first_line = response_text.strip().split("\n")[0] if response_text else "Step completed"
+        return first_line[:80] + ("..." if len(first_line) > 80 else "")
+
 
     def route_stream(self, message: str, model: str = "auto"):
         """
@@ -373,6 +354,7 @@ Rules:
 5. In step "payload", extract parameters declared for that tool.
 6. If no specialized domain agent matches the request, set "selected_agent" to "ai" and "action" to "general_chat".
 7. For email steps, ALWAYS include a "body" field containing the complete email text and reference previous step outputs using placeholders like "{{step_1.meet_link}}" or "{{meeting_details.meet_link}}".
+8. For each step, ALWAYS include a "description" field containing a concise, natural, user-friendly explanation of what this step is doing (e.g. "Fetching active sprint tasks from ClickUp", "Scheduling 1-hour Sprint Review on Google Calendar", "Sending invitation email").
 
 JSON Schema:
 {{
@@ -382,6 +364,7 @@ JSON Schema:
             "step_id": 1,
             "selected_agent": "<agent_name>",
             "action": "<action_name from agent's tools>",
+            "description": "<natural human-readable explanation of this step>",
             "payload": {{}},
             "output_key": "step_1"
         }}
@@ -480,7 +463,7 @@ JSON Schema:
             action = step.get("action")
             raw_payload = step.get("payload") or {}
             step_id = step.get("step_id", idx)
-            label = self._get_step_label(agent_name, action, raw_payload)
+            label = self._get_step_label(agent_name, action, step)
             formatted_steps.append({
                 "step_id": step_id,
                 "agent": agent_name,
@@ -507,7 +490,7 @@ JSON Schema:
             raw_payload = step.get("payload") or {}
             step_id = step.get("step_id", idx)
             output_key = step.get("output_key") or f"step_{step_id}"
-            label = self._get_step_label(agent_name, action, raw_payload)
+            label = self._get_step_label(agent_name, action, step)
 
             if action:
                 raw_payload["action"] = action
