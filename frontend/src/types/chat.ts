@@ -1,3 +1,14 @@
+export interface ThoughtStep {
+  id?: string;
+  step_id: number;
+  agent: string;
+  action?: string;
+  label: string;
+  status: "pending" | "running" | "completed" | "error";
+  summary?: string;
+  data?: any;
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant";
@@ -5,7 +16,10 @@ export interface Message {
   timestamp: string; // ISO string representation
   model?: ModelOption;
   source?: string;
+  thoughtSteps?: ThoughtStep[];
+  isStreaming?: boolean;
 }
+
 
 export interface ChatSession {
   id: string;

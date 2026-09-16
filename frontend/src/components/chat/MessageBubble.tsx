@@ -3,6 +3,8 @@ import { Message } from "@/types/chat";
 import { Bot, User, Copy, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import ThoughtStream from "./ThoughtStream";
+
 
 interface CodeBlockProps {
   language: string;
@@ -251,18 +253,39 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             </span>
           </div>
 
+          {/* Render Thought Stream if steps are present */}
+          {isAssistant && message.thoughtSteps && message.thoughtSteps.length > 0 && (
+            <ThoughtStream
+              steps={message.thoughtSteps}
+              isStreaming={message.isStreaming}
+            />
+          )}
+
           {/* Actual Bubble Text */}
-          <div
-            className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-              isAssistant
-                ? "bg-white text-slate-800 border border-slate-100 shadow-sm"
-                : "bg-slate-900 text-slate-50 shadow-md"
-            }`}
-          >
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-              {message.content}
-            </ReactMarkdown>
-          </div>
+          {(message.content || !message.isStreaming) && (
+            <div
+              className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                isAssistant
+                  ? "bg-white text-slate-800 border border-slate-100 shadow-sm"
+                  : "bg-slate-900 text-slate-50 shadow-md"
+              }`}
+            >
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+                {message.content}
+              </ReactMarkdown>
+              {message.isStreaming && (
+                <span className="inline-block w-1.5 h-4 ml-1 bg-indigo-600 animate-pulse align-middle rounded-sm" />
+              )}
+            </div>
+          )}
+
+          {/* If streaming with no content yet and no thought steps, show initializing status */}
+          {message.isStreaming && !message.content && (!message.thoughtSteps || message.thoughtSteps.length === 0) && (
+            <div className="bg-white border border-slate-100 shadow-sm rounded-2xl px-4 py-3 text-xs text-slate-500 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-indigo-600 animate-ping" />
+              <span>Supervisor analyzing query and preparing agent plan...</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

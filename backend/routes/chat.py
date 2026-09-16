@@ -1,10 +1,42 @@
-from flask import Blueprint, request, jsonify
-import traceback    
+import json
+import traceback
+from flask import Blueprint, request, jsonify, Response, stream_with_context
 
 from agents.base.router_agent import RouterAgent
 
 chat_bp = Blueprint('chat', __name__)
 agent_router = RouterAgent()
+
+@chat_bp.route("/chat/stream", methods=["POST"])
+def chat_stream():
+    data = request.json or {}
+    message = data.get("message", "")
+    model = data.get("model", "auto")
+    print("STREAM REQUEST:", data)
+
+    if not message:
+        return jsonify({"error": "Message is required."}), 400
+
+    def generate():
+        try:
+            for event_payload in agent_router.route_stream(message=message, model=model):
+                event_name = event_payload.get("event", "message")
+                event_data = event_payload.get("data", {})
+                yield f"event: {event_name}\ndata: {json.dumps(event_data)}\n\n"
+        except Exception as e:
+            print("\n========== STREAM ERROR ==========")
+            print(e)
+            traceback.print_exc()
+            error_data = {"error": str(e)}
+            yield f"event: error\ndata: {json.dumps(error_data)}\n\n"
+
+    response = Response(stream_with_context(generate()), mimetype="text/event-stream")
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["X-Accel-Buffering"] = "no"
+    response.headers["Connection"] = "keep-alive"
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    return response
+
 
 @chat_bp.route("/chat", methods=["POST"])
 def chat():

@@ -59,3 +59,52 @@ class AIManager:
             pass
 
         raise Exception("All AI providers failed")
+
+    def generate_stream(self, prompt: str, model: str = "auto"):
+        """Yields dicts: {
+            "token": "...",
+            "model": "gemini" | "groq"
+        }"""
+        if model == "gemini":
+            for chunk in self.gemini.generate_stream(prompt):
+                if chunk.startswith("Gemini Error"):
+                    raise Exception(chunk)
+                yield {"token": chunk, "model": "gemini"}
+            return
+
+        if model == "groq":
+            for chunk in self.groq.generate_stream(prompt):
+                if chunk.startswith("Groq Error"):
+                    raise Exception(chunk)
+                yield {"token": chunk, "model": "groq"}
+            return
+
+        # Auto mode: try gemini first with groq fallback
+        try:
+            gemini_gen = self.gemini.generate_stream(prompt)
+            first_chunk = next(gemini_gen, None)
+            if first_chunk is not None and not first_chunk.startswith("Gemini Error"):
+                yield {"token": first_chunk, "model": "gemini"}
+                for chunk in gemini_gen:
+                    if chunk.startswith("Gemini Error"):
+                        break
+                    yield {"token": chunk, "model": "gemini"}
+                return
+        except Exception:
+            pass
+
+        try:
+            groq_gen = self.groq.generate_stream(prompt)
+            first_chunk = next(groq_gen, None)
+            if first_chunk is not None and not first_chunk.startswith("Groq Error"):
+                yield {"token": first_chunk, "model": "groq"}
+                for chunk in groq_gen:
+                    if chunk.startswith("Groq Error"):
+                        break
+                    yield {"token": chunk, "model": "groq"}
+                return
+        except Exception:
+            pass
+
+        raise Exception("All AI providers failed streaming")
+

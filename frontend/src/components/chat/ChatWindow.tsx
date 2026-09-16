@@ -124,7 +124,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             ))}
 
             {/* Loading / Typing indicator */}
-            {isLoading && <TypingIndicator />}
+            {isLoading && !messages.some((m) => m.isStreaming) && <TypingIndicator />}
 
             {/* Backend connection error notification */}
             {error && (
