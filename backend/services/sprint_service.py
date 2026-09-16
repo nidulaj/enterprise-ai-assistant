@@ -10,19 +10,34 @@ class SprintService:
 
     def generate_summary(self, model="auto"):
 
-        tasks = self.clickup.get_tasks()
+        raw_tasks = self.clickup.get_tasks()
+        
+        # ClickUp API returns {"tasks": [...]}, extract the task list
+        if isinstance(raw_tasks, dict):
+            tasks = raw_tasks.get("tasks", [])
+        elif isinstance(raw_tasks, list):
+            tasks = raw_tasks
+        else:
+            tasks = []
 
         if not tasks:
-            return "No tasks found."
+            return "No tasks found in the current sprint."
 
         task_text = ""
 
         for task in tasks:
+            if isinstance(task, dict):
+                name = task.get("name", "Unnamed Task")
+                status_raw = task.get("status")
+                if isinstance(status_raw, dict):
+                    status = status_raw.get("status", "unknown")
+                else:
+                    status = str(status_raw or "unknown")
 
-            task_text += (
-                f"- {task['name']} "
-                f"(Status: {task['status']})\n"
-            )
+                task_text += (
+                    f"- {name} "
+                    f"(Status: {status})\n"
+                )
 
         from agents.clickup.prompts import SPRINT_SUMMARY_PROMPT
         prompt = SPRINT_SUMMARY_PROMPT.format(task_text=task_text)
@@ -32,4 +47,6 @@ class SprintService:
             model=model
         )
 
-        return response["response"]
+        if isinstance(response, dict):
+            return response.get("response", str(response))
+        return str(response)

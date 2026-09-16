@@ -140,6 +140,14 @@ JSON Schema:
                     step_output.update(response.data)
                 step_output["response_text"] = response.response_text
 
+                # Store convenient aliases for summaries and textual outputs
+                if "summary" in step_output:
+                    step_output["summary_text"] = step_output["summary"]
+                    step_output["text"] = step_output["summary"]
+                elif response.response_text:
+                    step_output["summary_text"] = response.response_text
+                    step_output["text"] = response.response_text
+
                 # Store under multiple keys for bulletproof placeholder lookup
                 context.set_memory(output_key, step_output)
                 context.set_memory(f"step_{step_id}", step_output)
@@ -172,7 +180,7 @@ JSON Schema:
     def _resolve_placeholders(self, payload: Any, context: AgentContext) -> Any:
         """
         Recursively resolves placeholder strings like '{step_1.meet_link}', '{{meeting_details.meet_link}}',
-        or '{meet_link}' using values stored in context.shared_memory.
+        or '{sprint_summary.summary_text}' using values stored in context.shared_memory.
         """
         if isinstance(payload, str):
             import re
@@ -199,15 +207,20 @@ JSON Schema:
                             if k.lower() == field_key.lower():
                                 val = v
                                 break
-                    if val is None and field_key.lower() in ["link", "url", "meeting_link", "google_meet", "meet_link", "meetlink"]:
+                    if val is None and any(k in field_key.lower() for k in ["link", "url", "meet"]):
                         val = memory_val.get("meet_link") or memory_val.get("meetLink") or memory_val.get("link") or memory_val.get("url")
+                    if val is None and any(k in field_key.lower() for k in ["summary", "text", "content", "desc", "body", "report", "response", "output", "result", "data", "message", "info"]):
+                        val = memory_val.get("summary_text") or memory_val.get("summary") or memory_val.get("response_text") or memory_val.get("response") or memory_val.get("text")
+                    # Fallback to response_text or summary if specific field not matched
+                    if val is None:
+                        val = memory_val.get("summary_text") or memory_val.get("summary") or memory_val.get("response_text")
                     if val is not None:
                         return str(val)
 
                 # 3. If memory_val is found and no field_key was requested
                 elif memory_val is not None and not field_key:
                     if isinstance(memory_val, dict):
-                        return memory_val.get("response_text") or str(memory_val)
+                        return memory_val.get("summary_text") or memory_val.get("summary") or memory_val.get("response_text") or str(memory_val)
                     return str(memory_val)
 
                 # 4. Fallback search across root shared_memory and all stored step dictionaries
@@ -224,8 +237,10 @@ JSON Schema:
                                 if k.lower() == target_field.lower():
                                     val = v
                                     break
-                        if val is None and target_field.lower() in ["link", "url", "meeting_link", "google_meet", "meet_link", "meetlink"]:
+                        if val is None and any(k in target_field.lower() for k in ["link", "url", "meet"]):
                             val = dict_obj.get("meet_link") or dict_obj.get("meetLink") or dict_obj.get("link") or dict_obj.get("url")
+                        if val is None and any(k in target_field.lower() for k in ["summary", "text", "content", "desc", "body", "report", "response", "output", "result", "data", "message", "info"]):
+                            val = dict_obj.get("summary_text") or dict_obj.get("summary") or dict_obj.get("response_text") or dict_obj.get("response") or dict_obj.get("text")
                         if val is not None:
                             return str(val)
 
