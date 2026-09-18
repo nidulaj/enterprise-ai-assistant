@@ -22,3 +22,13 @@ class GeminiProvider:
         
         except Exception as e:
             return f"Gemini Error: {str(e)}"
+
+    def generate_stream(self, prompt: str):
+        try:
+            response = self.model.generate_content(prompt, stream=True)
+            for chunk in response:
+                if chunk.text:
+                    yield chunk.text
+        except Exception as e:
+            yield f"Gemini Error: {str(e)}"
+

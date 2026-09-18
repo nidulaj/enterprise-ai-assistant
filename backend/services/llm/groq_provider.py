@@ -29,3 +29,23 @@ class GroqProvider:
         
         except Exception as e:
             return f"Groq Error: {str(e)}"
+
+    def generate_stream(self, prompt: str):
+        try:
+            stream = self.client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }],
+                temperature=0.7,
+                max_tokens=2048,
+                stream=True
+            )
+            for chunk in stream:
+                delta = chunk.choices[0].delta.content if chunk.choices else None
+                if delta:
+                    yield delta
+        except Exception as e:
+            yield f"Groq Error: {str(e)}"
+

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Message, ChatSession, ModelOption, DocumentItem } from "@/types/chat";
-import { sendChatMessage, getDocuments, uploadDocument } from "@/lib/api";
+import { sendChatMessage, sendChatMessageStream, getDocuments, uploadDocument } from "@/lib/api";
 
 const LOCAL_STORAGE_KEY = "enterprise_ai_sessions";
 const MODEL_STORAGE_KEY = "enterprise_ai_model";
@@ -177,7 +177,7 @@ export const useChat = () => {
     }
   };
 
-  // Send a message to the active session
+  // Send a message to the active session with real-time SSE streaming
   const sendMessage = async (content: string) => {
     if (!content.trim() || isLoading) return;
 
@@ -188,10 +188,20 @@ export const useChat = () => {
       timestamp: new Date().toISOString(),
     };
 
-    // Update session state with the user message
+    const assistantMsgId = `msg-${Date.now() + 1}`;
+    const initialAssistantMessage: Message = {
+      id: assistantMsgId,
+      role: "assistant",
+      content: "",
+      timestamp: new Date().toISOString(),
+      model: selectedModel,
+      source: "ai",
+      thoughtSteps: [],
+      isStreaming: true,
+    };
+
     let activeSession = sessions.find((s) => s.id === currentSessionId);
     if (!activeSession) {
-      // Create a fallback session if one doesn't exist
       activeSession = {
         id: currentSessionId || `session-${Date.now()}`,
         title: "New Chat",
@@ -200,92 +210,220 @@ export const useChat = () => {
       };
     }
 
-    const updatedMessages = [...activeSession.messages, userMessage];
-    
-    // Auto-update the session title on the first message
     let title = activeSession.title;
     if (activeSession.messages.length === 0) {
-      // Use the first 25 characters of the user's message as the title
       title = content.length > 25 ? `${content.substring(0, 25)}...` : content;
     }
 
+    const updatedMessages = [...activeSession.messages, userMessage, initialAssistantMessage];
     const updatedSession: ChatSession = {
       ...activeSession,
       title,
       messages: updatedMessages,
     };
 
-    const updatedSessions = sessions.map((s) =>
-      s.id === activeSession!.id ? updatedSession : s
-    );
-    
-    // Put current session at the top of the history list
-    const sortedSessions = [
+    const updatedSessions = [
       updatedSession,
-      ...updatedSessions.filter((s) => s.id !== activeSession!.id),
+      ...sessions.filter((s) => s.id !== activeSession!.id),
     ];
 
-    saveSessions(sortedSessions);
+    setSessions(updatedSessions);
     setCurrentSessionId(updatedSession.id);
     setIsLoading(true);
     setError(null);
 
-    try {
-      const responseData = await sendChatMessage(content, selectedModel);
-      
-      const answerContent = typeof responseData.answer === "string"
-        ? responseData.answer
-        : responseData.answer?.response || "";
-        
-      const answerModel = typeof responseData.answer === "string"
-        ? (responseData.model || selectedModel)
-        : responseData.answer?.model || selectedModel;
+    // Track stream state in local variables for smooth accumulation
+    let accumulatedContent = "";
+    let accumulatedSource = "ai";
+    let accumulatedModel = selectedModel;
+    let accumulatedSteps: any[] = [];
 
-      const assistantMessage: Message = {
-        id: `msg-${Date.now() + 1}`,
-        role: "assistant",
-        content: answerContent,
-        timestamp: new Date().toISOString(),
-        model: answerModel,
-        source: responseData.source,
-      };
-
-      const finalMessages = [...updatedMessages, assistantMessage];
-      const finalSession = {
-        ...updatedSession,
-        messages: finalMessages,
-      };
-
-      const finalSessions = sortedSessions.map((s) =>
-        s.id === finalSession.id ? finalSession : s
+    const updateCurrentAssistantMessage = (patch: Partial<Message>) => {
+      setSessions((prevSessions) =>
+        prevSessions.map((session) => {
+          if (session.id !== updatedSession.id) return session;
+          return {
+            ...session,
+            messages: session.messages.map((m) => {
+              if (m.id !== assistantMsgId) return m;
+              return { ...m, ...patch };
+            }),
+          };
+        })
       );
+    };
 
-      saveSessions(finalSessions);
+    try {
+      await sendChatMessageStream(content, selectedModel, {
+        onThinking: () => {
+          // Optional thinking pulse
+        },
+        onPlanCreated: (data) => {
+          accumulatedSteps = (data.steps || []).map((s) => ({
+            ...s,
+            status: s.status || "pending",
+          }));
+          updateCurrentAssistantMessage({
+            thoughtSteps: [...accumulatedSteps],
+          });
+        },
+        onStepStart: (data) => {
+          const stepIndex = accumulatedSteps.findIndex((s) => s.step_id === data.step_id);
+          if (stepIndex >= 0) {
+            accumulatedSteps[stepIndex] = {
+              ...accumulatedSteps[stepIndex],
+              status: "running",
+              label: data.label || accumulatedSteps[stepIndex].label,
+            };
+          } else {
+            accumulatedSteps.push({
+              step_id: data.step_id,
+              agent: data.agent,
+              action: data.action,
+              label: data.label,
+              status: "running",
+            });
+          }
+          updateCurrentAssistantMessage({
+            thoughtSteps: [...accumulatedSteps],
+          });
+        },
+        onStepComplete: (data) => {
+          const stepIndex = accumulatedSteps.findIndex((s) => s.step_id === data.step_id);
+          if (stepIndex >= 0) {
+            accumulatedSteps[stepIndex] = {
+              ...accumulatedSteps[stepIndex],
+              status: data.status || "completed",
+              summary: data.summary || accumulatedSteps[stepIndex].summary,
+              data: data.data || accumulatedSteps[stepIndex].data,
+            };
+          } else {
+            accumulatedSteps.push({
+              step_id: data.step_id,
+              agent: data.agent,
+              action: data.action,
+              label: data.label || `Step ${data.step_id}`,
+              status: data.status || "completed",
+              summary: data.summary,
+              data: data.data,
+            });
+          }
+          updateCurrentAssistantMessage({
+            thoughtSteps: [...accumulatedSteps],
+          });
+        },
+        onToken: (token) => {
+          accumulatedContent += token;
+          updateCurrentAssistantMessage({
+            content: accumulatedContent,
+          });
+        },
+        onDone: (data) => {
+          accumulatedSource = data.source || accumulatedSource;
+          accumulatedModel = data.model || accumulatedModel;
+          if (data.response_text) {
+            accumulatedContent = data.response_text;
+          }
+
+          if (data.steps && data.steps.length > 0) {
+            accumulatedSteps = data.steps;
+          } else {
+            accumulatedSteps = accumulatedSteps.map((s) => ({
+              ...s,
+              status: s.status === "running" ? "completed" : s.status,
+            }));
+          }
+
+          // Final update and commit to localStorage
+          setSessions((prevSessions) => {
+            const next = prevSessions.map((session) => {
+              if (session.id !== updatedSession.id) return session;
+              return {
+                ...session,
+                messages: session.messages.map((m) => {
+                  if (m.id !== assistantMsgId) return m;
+                  return {
+                    ...m,
+                    content: accumulatedContent,
+                    source: accumulatedSource,
+                    model: accumulatedModel,
+                    thoughtSteps: [...accumulatedSteps],
+                    isStreaming: false,
+                  };
+                }),
+              };
+            });
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next));
+            return next;
+          });
+        },
+        onError: (errMsg) => {
+          setError(errMsg);
+          updateCurrentAssistantMessage({
+            isStreaming: false,
+          });
+        },
+      });
     } catch (err: any) {
-      console.error(err);
-      const serverError = err.response?.data?.error || err.response?.data?.message;
+      console.error("Streaming chat failed, checking fallback:", err);
+      // Fallback: if streaming failed before any response, attempt fallback non-streaming
+      if (!accumulatedContent && accumulatedSteps.length === 0) {
+        try {
+          const fallbackData = await sendChatMessage(content, selectedModel);
+          const answerContent =
+            typeof fallbackData.answer === "string"
+              ? fallbackData.answer
+              : fallbackData.answer?.response || "";
+          const answerModel =
+            typeof fallbackData.answer === "string"
+              ? fallbackData.model || selectedModel
+              : fallbackData.answer?.model || selectedModel;
+
+          setSessions((prevSessions) => {
+            const next = prevSessions.map((session) => {
+              if (session.id !== updatedSession.id) return session;
+              return {
+                ...session,
+                messages: session.messages.map((m) => {
+                  if (m.id !== assistantMsgId) return m;
+                  return {
+                    ...m,
+                    content: answerContent,
+                    source: fallbackData.source,
+                    model: answerModel,
+                    isStreaming: false,
+                  };
+                }),
+              };
+            });
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next));
+            return next;
+          });
+          return;
+        } catch (fallbackErr: any) {
+          console.error("Fallback non-streaming also failed:", fallbackErr);
+        }
+      }
+
+      updateCurrentAssistantMessage({ isStreaming: false });
+      const serverError = err.message;
       if (
         serverError &&
         (serverError.includes("429") ||
           serverError.toLowerCase().includes("quota") ||
-          serverError.toLowerCase().includes("rate limit") ||
-          serverError.toLowerCase().includes("limit exceeded") ||
-          serverError.toLowerCase().includes("exceeded your current quota"))
+          serverError.toLowerCase().includes("rate limit"))
       ) {
         setError(
-          "Gemini API quota or rate limit exceeded. Please use the model selector at the bottom to switch to another model (such as Groq)."
+          "AI quota or rate limit exceeded. Switch model selector at bottom to alternate model."
         );
       } else {
-        setError(
-          serverError ||
-            err.message ||
-            "Failed to fetch AI response. Please try again."
-        );
+        setError(serverError || "Failed to fetch response. Please try again.");
       }
     } finally {
       setIsLoading(false);
     }
   };
+
 
   return {
     sessions,
