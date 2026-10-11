@@ -1,6 +1,7 @@
 import datetime
 import os
 import os.path
+import uuid
 
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
@@ -56,7 +57,7 @@ class CalendarService:
         return build("calendar", "v3", credentials=creds)
     
     def create_meeting(self, summary, start_time, end_time):
-        
+        request_id = uuid.uuid4().hex
         event = {
             "summary": summary,
             "start": {
@@ -69,30 +70,52 @@ class CalendarService:
             },
             "conferenceData": {
                 "createRequest": {
-                    "requestId": str(datetime.datetime.now().timestamp()),
+                    "requestId": request_id,
                     "conferenceSolutionKey": {"type": "hangoutsMeet"}
                 }
             }
         }
         
-        event = self.service.events().insert(
-            calendarId="primary",
-            body=event,
-            conferenceDataVersion=1
-        ).execute()
+        try:
+            created_event = self.service.events().insert(
+                calendarId="primary",
+                body=event,
+                conferenceDataVersion=1
+            ).execute()
+        except Exception as e:
+            # If conference creation failed (e.g. conferenceData error), fallback without conference
+            err_str = str(e).lower()
+            if "conferencedata" in err_str or "conferencesolutionkey" in err_str or "badrequest" in err_str:
+                event_no_conf = {
+                    "summary": summary,
+                    "start": {
+                        "dateTime": start_time,
+                        "timeZone": "Asia/Colombo",
+                    },
+                    "end": {
+                        "dateTime": end_time,
+                        "timeZone": "Asia/Colombo",
+                    }
+                }
+                created_event = self.service.events().insert(
+                    calendarId="primary",
+                    body=event_no_conf
+                ).execute()
+            else:
+                raise e
         
         meet_link = None
-        conference = event.get("conferenceData")
+        conference = created_event.get("conferenceData")
         
         if conference:
-            for entry in conference.get("entryPoints",[]):
+            for entry in conference.get("entryPoints", []):
                 if entry.get("entryPointType") == "video":
                     meet_link = entry.get("uri")
                     break
             
-        return{
-            "summary": event["summary"],
-            "start_time": event["start"]["dateTime"],
-            "end_time": event["end"]["dateTime"],
+        return {
+            "summary": created_event.get("summary", summary),
+            "start_time": created_event.get("start", {}).get("dateTime", start_time),
+            "end_time": created_event.get("end", {}).get("dateTime", end_time),
             "meet_link": meet_link
         }

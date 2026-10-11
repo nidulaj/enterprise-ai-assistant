@@ -17,15 +17,15 @@ class CalendarAgent(BaseAgent):
     def register_tools(self) -> None:
         self.tools_registry.register(Tool(
             name="create_meeting",
-            description="Create a new calendar event with summary, start time, and end time.",
+            description="Create a new calendar event. Parameters: summary (meeting title), start_time (e.g. 'tomorrow at 2pm', 'Friday 10am', or ISO 'YYYY-MM-DDTHH:MM:SS'), end_time (optional, e.g. 'tomorrow at 3pm', or ISO 'YYYY-MM-DDTHH:MM:SS').",
             func=create_meeting
         ), agent_name=self.name)
 
     def execute(self, request: AgentRequest, context: Optional[AgentContext] = None) -> AgentResponse:
         payload = request.payload or {}
-        summary = payload.get("summary") or payload.get("title") or "Sprint Review"
-        start_time = payload.get("start_time") or "2026-07-14T15:00:00"
-        end_time = payload.get("end_time") or "2026-07-14T16:00:00"
+        summary = payload.get("summary") or payload.get("title") or "Meeting"
+        start_time = payload.get("start_time")
+        end_time = payload.get("end_time")
 
         meeting = self.tools_registry.execute_tool(
             "create_meeting",
@@ -40,8 +40,8 @@ class CalendarAgent(BaseAgent):
             response_text = (
                 f"Meeting created successfully.\n\n"
                 f"Event: {meeting.get('summary', summary)}\n"
-                f"Time: {meeting.get('start_time', start_time)} to {meeting.get('end_time', end_time)}\n"
-                f"Link: {meeting.get('meet_link') or 'No link generated'}"
+                f"Time: {meeting.get('start_time', '')} to {meeting.get('end_time', '')}\n"
+                f"Link: {meeting.get('meet_link') or 'No video link generated'}"
             )
         else:
             response_text = str(meeting)
