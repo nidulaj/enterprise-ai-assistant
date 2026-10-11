@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from typing import Optional, Dict, Any
 
 from agents.base.agent import BaseAgent
@@ -41,12 +42,17 @@ class RouterAgent:
         context = AgentContext(query=message, model=model)
         agent_manifest = self.registry.get_manifest()
 
+        current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S (%A)")
+
         prompt = f"""
 You are a Principal Multi-Agent Supervisor / Planner for an Enterprise AI Assistant.
 Analyze the user request and generate a sequential execution plan using the declared capabilities of registered domain agents.
 
 Available Agents Manifest:
 {json.dumps(agent_manifest, indent=2)}
+
+Current System Time:
+{current_time_str}
 
 User Request:
 "{message}"
@@ -336,12 +342,17 @@ JSON Schema:
             "data": {"message": "Supervisor analyzing request and creating execution plan..."}
         }
 
+        current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S (%A)")
+
         prompt = f"""
 You are a Principal Multi-Agent Supervisor / Planner for an Enterprise AI Assistant.
 Analyze the user request and generate a sequential execution plan using the declared capabilities of registered domain agents.
 
 Available Agents Manifest:
 {json.dumps(agent_manifest, indent=2)}
+
+Current System Time:
+{current_time_str}
 
 User Request:
 "{message}"
