@@ -1,11 +1,16 @@
 import os
 import datetime
+import uuid
+import urllib.parse
 from functools import wraps
 import jwt
 import bcrypt
-from flask import Blueprint, request, jsonify, make_response, g
+import requests
+from flask import Blueprint, request, jsonify, make_response, redirect, g
 from dotenv import load_dotenv
 from supabase import create_client
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 
 load_dotenv()
 
@@ -18,12 +23,100 @@ JWT_SECRET = os.getenv(
     "enterprise-ai-assistant-jwt-secret-key-production-super-secure-32bytes-min"
 )
 
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:5000")
+
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise ValueError("SUPABASE_URL or SUPABASE_KEY is missing from environment variables.")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 COOKIE_NAME = "access_token"
 TOKEN_EXPIRY_DAYS = 7
+
+
+def create_jwt_token(user_record: dict) -> str:
+    """Generates a cryptographically signed application JWT token."""
+    exp_time = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=TOKEN_EXPIRY_DAYS)
+    iat_time = datetime.datetime.now(datetime.timezone.utc)
+
+    token_payload = {
+        "id": user_record["id"],
+        "username": user_record["username"],
+        "exp": exp_time,
+        "iat": iat_time
+    }
+
+    return jwt.encode(token_payload, JWT_SECRET, algorithm="HS256")
+
+
+def set_auth_cookie(response, token: str):
+    """Sets HttpOnly access_token cookie on the response."""
+    is_production = os.getenv("FLASK_ENV") == "production"
+    max_age = TOKEN_EXPIRY_DAYS * 24 * 3600
+
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=token,
+        httponly=True,
+        samesite="Lax",
+        secure=is_production,
+        max_age=max_age,
+        path="/"
+    )
+    return response
+
+
+def find_or_create_google_user(email: str, name: str = None) -> dict:
+    """
+    Finds an existing user in Supabase 'users' table by email or username,
+    or creates a new record if not yet registered.
+    """
+    clean_email = email.strip().lower()
+    prefix = clean_email.split("@")[0]
+
+    # 1. Search by exact email
+    try:
+        res = supabase.table("users").select("id, username").eq("username", clean_email).limit(1).execute()
+        if res and res.data and len(res.data) > 0:
+            return res.data[0]
+    except Exception as e:
+        print(f"[Supabase email check warning] {e}")
+
+    # 2. Search by prefix
+    try:
+        res = supabase.table("users").select("id, username").eq("username", prefix).limit(1).execute()
+        if res and res.data and len(res.data) > 0:
+            return res.data[0]
+    except Exception as e:
+        print(f"[Supabase prefix check warning] {e}")
+
+    # 3. Create new user in Supabase 'users' table
+    username_to_use = clean_email
+    generated_password = f"google_oauth_{uuid.uuid4().hex[:16]}"
+
+    try:
+        insert_res = supabase.table("users").insert({
+            "username": username_to_use,
+            "password": generated_password
+        }).execute()
+
+        if insert_res and insert_res.data and len(insert_res.data) > 0:
+            return insert_res.data[0]
+    except Exception as e:
+        print(f"[Google User Creation Warning] {e}")
+
+    # Fallback: check again if another process inserted it
+    try:
+        fallback = supabase.table("users").select("id, username").eq("username", username_to_use).limit(1).execute()
+        if fallback and fallback.data and len(fallback.data) > 0:
+            return fallback.data[0]
+    except Exception as e:
+        print(f"[Supabase fallback check warning] {e}")
+
+    # Final fallback: return safe virtual record
+    return {"id": int(hash(clean_email) % 1000000), "username": username_to_use}
 
 
 def extract_token_from_request():
@@ -95,10 +188,10 @@ def login():
             supabase.table("users")
             .select("id, username, password")
             .eq("username", username)
-            .maybe_single()
+            .limit(1)
             .execute()
         )
-        user_record = response.data
+        user_record = response.data[0] if (response and response.data and len(response.data) > 0) else None
 
         if not user_record:
             return jsonify({"error": "Invalid username or password."}), 401
@@ -119,20 +212,8 @@ def login():
         if not is_valid:
             return jsonify({"error": "Invalid username or password."}), 401
 
-        # Generate JWT token with expiration
-        exp_time = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=TOKEN_EXPIRY_DAYS)
-        iat_time = datetime.datetime.now(datetime.timezone.utc)
+        token = create_jwt_token(user_record)
 
-        token_payload = {
-            "id": user_record["id"],
-            "username": user_record["username"],
-            "exp": exp_time,
-            "iat": iat_time
-        }
-
-        token = jwt.encode(token_payload, JWT_SECRET, algorithm="HS256")
-
-        # Create response and attach HttpOnly cookie
         res = make_response(jsonify({
             "success": True,
             "token": token,
@@ -142,24 +223,190 @@ def login():
             }
         }), 200)
 
-        is_production = os.getenv("FLASK_ENV") == "production"
-        max_age = TOKEN_EXPIRY_DAYS * 24 * 3600
-
-        res.set_cookie(
-            key=COOKIE_NAME,
-            value=token,
-            httponly=True,
-            samesite="Lax",
-            secure=is_production,
-            max_age=max_age,
-            path="/"
-        )
-
+        set_auth_cookie(res, token)
         return res
 
     except Exception as e:
         print(f"[Auth Error] {e}")
         return jsonify({"error": "Internal authentication server error."}), 500
+
+
+# ============================================================================
+# GOOGLE AUTHENTICATION ENDPOINTS
+# ============================================================================
+
+@auth_bp.route("/auth/google", methods=["GET"])
+def google_oauth_redirect():
+    """
+    Initiates Google OAuth 2.0 Web flow.
+    Redirects the user to the Google Account consent screen.
+    Requests openid, email, profile, and Google Calendar scopes.
+    """
+    client_id = GOOGLE_CLIENT_ID or os.getenv("GOOGLE_CLIENT_ID")
+    if not client_id:
+        return jsonify({"error": "GOOGLE_CLIENT_ID is not configured in backend/.env"}), 500
+
+    redirect_uri = os.getenv(
+        "GOOGLE_REDIRECT_URI",
+        f"{BACKEND_URL}/auth/google/callback"
+    )
+
+    scope = "openid email profile https://www.googleapis.com/auth/calendar"
+    state = str(uuid.uuid4())
+
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": scope,
+        "access_type": "offline",
+        "prompt": "consent",
+        "state": state
+    }
+
+    google_auth_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)
+    return redirect(google_auth_url)
+
+
+@auth_bp.route("/auth/google/callback", methods=["GET"])
+def google_oauth_callback():
+    """
+    Handles Google OAuth 2.0 redirect callback.
+    Exchanges code for tokens, synchronizes user in Supabase,
+    sets HttpOnly session cookie, and redirects user to /chat.
+    """
+    code = request.args.get("code")
+    error = request.args.get("error")
+
+    frontend_redirect_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+    if error or not code:
+        return redirect(f"{frontend_redirect_url}/?error={error or 'google_auth_denied'}")
+
+    client_id = GOOGLE_CLIENT_ID or os.getenv("GOOGLE_CLIENT_ID")
+    client_secret = GOOGLE_CLIENT_SECRET or os.getenv("GOOGLE_CLIENT_SECRET")
+    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", f"{BACKEND_URL}/auth/google/callback")
+
+    try:
+        # Exchange authorization code for Google access token and ID token
+        token_endpoint = "https://oauth2.googleapis.com/token"
+        token_payload = {
+            "code": code,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code"
+        }
+
+        res = requests.post(token_endpoint, data=token_payload, timeout=10)
+        token_data = res.json()
+
+        if "error" in token_data:
+            err_desc = token_data.get("error_description", token_data["error"])
+            print(f"[Google OAuth Callback Error] {err_desc}")
+            return redirect(f"{frontend_redirect_url}/?error={urllib.parse.quote(err_desc)}")
+
+        # Decode ID token or query userinfo to get user details
+        google_user = None
+        id_token_jwt = token_data.get("id_token")
+
+        if id_token_jwt:
+            try:
+                google_user = id_token.verify_oauth2_token(
+                    id_token_jwt,
+                    google_requests.Request(),
+                    client_id,
+                    clock_skew_in_seconds=10
+                )
+            except Exception as e:
+                print(f"[ID Token verify warning] {e}")
+
+        if not google_user and "access_token" in token_data:
+            userinfo_res = requests.get(
+                "https://www.googleapis.com/oauth2/v3/userinfo",
+                headers={"Authorization": f"Bearer {token_data['access_token']}"},
+                timeout=10
+            )
+            google_user = userinfo_res.json()
+
+        if not google_user or not google_user.get("email"):
+            return redirect(f"{frontend_redirect_url}/?error=Google user profile not found.")
+
+        email = google_user["email"]
+        name = google_user.get("name") or email.split("@")[0]
+
+        # Find or create user in Supabase 'users' table
+        user_record = find_or_create_google_user(email, name)
+
+        # Automatically persist Google tokens for Calendar Agent (so token.json is synced)
+        try:
+            import json
+            token_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "token.json")
+            with open(token_path, "w") as tf:
+                json.dump(token_data, tf)
+            print("[Google Auth] Synced calendar credentials to token.json")
+        except Exception as te:
+            print(f"[Token Save Notice] {te}")
+
+        # Issue application JWT token
+        app_token = create_jwt_token(user_record)
+
+        # Redirect user directly to the authenticated /chat workspace with cookie set
+        response = make_response(redirect(f"{frontend_redirect_url}/chat"))
+        set_auth_cookie(response, app_token)
+        return response
+
+    except Exception as e:
+        print(f"[Google OAuth Exception] {e}")
+        return redirect(f"{frontend_redirect_url}/?error=Google authentication failed.")
+
+
+@auth_bp.route("/auth/google", methods=["POST"])
+def google_verify_credential():
+    """
+    Accepts Google ID token (from Google Identity Services popup / One Tap),
+    verifies it with Google, finds/creates user in Supabase, and sets the HttpOnly session cookie.
+    """
+    data = request.json or {}
+    credential = data.get("credential") or data.get("token") or data.get("id_token")
+
+    if not credential:
+        return jsonify({"error": "Google credential token is required."}), 400
+
+    client_id = GOOGLE_CLIENT_ID or os.getenv("GOOGLE_CLIENT_ID")
+
+    try:
+        google_user = id_token.verify_oauth2_token(
+            credential,
+            google_requests.Request(),
+            client_id,
+            clock_skew_in_seconds=10
+        )
+    except Exception as e:
+        print(f"[Google Credential Verify Error] {e}")
+        return jsonify({"error": f"Invalid Google credential: {str(e)}"}), 401
+
+    email = google_user.get("email")
+    if not email:
+        return jsonify({"error": "Google token does not contain an email address."}), 400
+
+    name = google_user.get("name") or email.split("@")[0]
+    user_record = find_or_create_google_user(email, name)
+
+    app_token = create_jwt_token(user_record)
+
+    res = make_response(jsonify({
+        "success": True,
+        "token": app_token,
+        "user": {
+            "id": user_record["id"],
+            "username": user_record["username"],
+            "email": email
+        }
+    }), 200)
+
+    set_auth_cookie(res, app_token)
+    return res
 
 
 @auth_bp.route("/auth/logout", methods=["GET", "POST"])

@@ -43,13 +43,31 @@ class CalendarService:
                             pass
 
             if not creds:
-                if not os.path.exists("credentials.json"):
-                    raise FileNotFoundError("credentials.json file not found for Google Calendar authentication.")
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    "credentials.json",
-                    SCOPES
-                )
-                creds = flow.run_local_server(port=0)
+                client_id = os.getenv("GOOGLE_CLIENT_ID")
+                client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+                
+                if client_id and client_secret:
+                    client_config = {
+                        "installed": {
+                            "client_id": client_id,
+                            "client_secret": client_secret,
+                            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                            "token_uri": "https://oauth2.googleapis.com/token",
+                            "redirect_uris": ["http://localhost"]
+                        }
+                    }
+                    flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
+                    creds = flow.run_local_server(port=0)
+                elif os.path.exists("credentials.json"):
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        "credentials.json",
+                        SCOPES
+                    )
+                    creds = flow.run_local_server(port=0)
+                else:
+                    raise FileNotFoundError(
+                        "Google Calendar credentials missing. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env or provide credentials.json."
+                    )
 
             with open("token.json", "w") as token:
                 token.write(creds.to_json())
