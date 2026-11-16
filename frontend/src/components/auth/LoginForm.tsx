@@ -24,7 +24,7 @@ import { AuthCard, AuthError } from "@/components/auth/AuthCard";
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const nextPath = searchParams.get("next") ?? "/dashboard";
+  const nextPath = searchParams.get("next") ?? "/chat";
   const callbackError = searchParams.get("error");
 
   const [username, setUsername] = useState("");

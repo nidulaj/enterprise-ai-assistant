@@ -1,6 +1,7 @@
-import React, { useRef } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { ChatSession, DocumentItem } from "@/types/chat";
-import { MessageSquare, Plus, Trash2, Bot, Menu, X, Upload, FileText } from "lucide-react";
+import { MessageSquare, Plus, Trash2, Bot, Menu, X, Upload, FileText, LogOut } from "lucide-react";
+import { signOut, getCurrentUserSession } from "@/app/login/actions";
 
 interface ChatSidebarProps {
   sessions: ChatSession[];
@@ -30,6 +31,15 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   uploadError,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [currentUser, setCurrentUser] = useState<string>("Enterprise User");
+
+  useEffect(() => {
+    getCurrentUserSession().then((session) => {
+      if (session?.username) {
+        setCurrentUser(session.username);
+      }
+    });
+  }, []);
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
@@ -214,17 +224,27 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
           </div>
         </div>
 
-        {/* Sidebar Footer */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950/60">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-semibold text-slate-300">
-              EA
+        {/* Sidebar Footer with Active JWT Session & Sign Out */}
+        <div className="p-3.5 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 border border-indigo-400/30 flex items-center justify-center text-xs font-bold text-white shrink-0 uppercase shadow-sm">
+              {currentUser.slice(0, 2)}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-slate-300 truncate">Enterprise User</p>
-              <p className="text-[10px] text-slate-500 truncate">user@enterprise.ai</p>
+              <p className="text-xs font-semibold text-slate-200 truncate capitalize">{currentUser}</p>
+              <p className="text-[10px] text-emerald-400 font-medium truncate flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                JWT Authenticated
+              </p>
             </div>
           </div>
+          <button
+            onClick={() => void signOut()}
+            title="Sign out of Enterprise Suite"
+            className="rounded-lg p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-900 border border-transparent hover:border-slate-800 transition-colors shrink-0"
+          >
+            <LogOut size={16} />
+          </button>
         </div>
       </aside>
     </>

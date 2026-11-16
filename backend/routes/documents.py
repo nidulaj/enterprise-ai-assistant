@@ -9,6 +9,7 @@ from supabase import create_client
 from rag.loader import PDFLoader
 from rag.chunker import Chunker
 from rag.vector_store import VectorStore
+from routes.auth import token_required
 
 load_dotenv()
 
@@ -47,6 +48,7 @@ os.makedirs(
 
 
 @document_bp.route("/documents/upload", methods=["POST"])
+@token_required
 def upload_document():
 
     local_path = None
@@ -303,6 +305,7 @@ def upload_document():
 
 
 @document_bp.route("/documents", methods=["GET"])
+@token_required
 def get_documents():
     try:
         response = (

@@ -1,51 +1,37 @@
-import Link from "next/link";
-
-import { SignOutButton } from "@/components/auth/SignOutButton";
+import { Suspense } from "react";
+import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
+import { LoginForm } from "@/components/auth/LoginForm";
+
+export const metadata: Metadata = {
+  title: "Enterprise AI Assistant — Multi-Agent Intelligence Platform",
+  description:
+    "Connect confidential data, orchestrate autonomous multi-agent reasoning, and accelerate decision-making inside a zero-trust enclave.",
+};
 
 export default async function HomePage() {
+  // If already authenticated with a valid JWT session, navigate straight to the chat assistant
   const session = await getSession();
-  const displayName = session?.username ?? "User";
+
+  if (session) {
+    redirect("/chat");
+  }
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-4 py-16 text-center">
-      <p className="text-sm font-medium uppercase tracking-wide text-indigo-600">
-        Enterprise AI Assistant
-      </p>
-      <h1 className="mt-3 text-4xl font-bold tracking-tight text-slate-900 sm:text-6xl">
-        Sign in to continue
-      </h1>
-      <p className="mt-6 max-w-xl text-lg leading-8 text-slate-600">
-        Sign in with your username and password from the users table. Your
-        session is stored in a secure cookie.
-      </p>
-
-      {session ? (
-        <div className="mt-10 space-y-4">
-          <p className="text-sm text-slate-600">
-            Signed in as{" "}
-            <span className="font-medium text-slate-900">{displayName}</span>
-          </p>
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <Link
-              href="/dashboard"
-              className="rounded-md bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
-            >
-              Open dashboard
-            </Link>
-            <SignOutButton className="rounded-md border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50" />
+    <Suspense
+      fallback={
+        <div className="min-h-screen w-full flex flex-col items-center justify-center bg-slate-950 text-slate-300">
+          <div className="flex flex-col items-center space-y-4">
+            <div className="h-10 w-10 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+            <p className="text-sm font-medium tracking-wide text-slate-400 animate-pulse">
+              Initializing Enterprise Multi-Agent Enclave...
+            </p>
           </div>
         </div>
-      ) : (
-        <div className="mt-10">
-          <Link
-            href="/login"
-            className="rounded-md bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
-          >
-            Sign in
-          </Link>
-        </div>
-      )}
-    </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }
