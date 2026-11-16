@@ -73,10 +73,11 @@ Rules:
 2. If the request requires multiple steps or agents (e.g. create a meeting AND send an email invitation, or fetch tasks AND email summary), break it down into sequential execution steps under "plan".
 3. For single-agent requests, provide a single step in the "plan" array.
 4. For each step, set "selected_agent" to the matching agent name, and set "action" to the exact tool "action" name declared under that agent's "tools" in the manifest.
-5. In step "payload", extract parameters declared for that tool.
-6. If no specialized domain agent matches the request, set "selected_agent" to "ai" and "action" to "general_chat".
-7. For email steps, ALWAYS include a "body" field containing the complete email text and reference previous step outputs using placeholders like "{{step_1.meet_link}}" or "{{meeting_details.meet_link}}".
-8. For each step, ALWAYS include a "description" field containing a concise, natural, user-friendly explanation of what this step is doing (e.g. "Fetching active sprint tasks from ClickUp", "Scheduling 1-hour Sprint Review on Google Calendar", "Sending invitation email").
+5. In step "payload", extract parameters declared for that tool. For "knowledge" agent ("answer_question"), set "question" in payload to the user question.
+6. For any questions asking about company information, Darko Novex, company vision, mission, values, policies, guidelines, employee handbook, coding standards, deployment guides, or internal documents, ALWAYS select "knowledge" as "selected_agent" and "answer_question" as "action".
+7. Only select "ai" with "general_chat" for pure conversational chit-chat or greetings (e.g. "hi", "who are you") that do not pertain to company facts or internal documents.
+8. For email steps, ALWAYS include a "body" field containing the complete email text and reference previous step outputs using placeholders like "{{{{step_1.meet_link}}}}" or "{{{{meeting_details.meet_link}}}}".
+9. For each step, ALWAYS include a "description" field containing a concise, natural, user-friendly explanation of what this step is doing.
 
 JSON Schema:
 {{
@@ -377,10 +378,11 @@ Rules:
 2. If the request requires multiple steps or agents (e.g. create a meeting AND send an email invitation, or fetch tasks AND email summary), break it down into sequential execution steps under "plan".
 3. For single-agent requests, provide a single step in the "plan" array.
 4. For each step, set "selected_agent" to the matching agent name, and set "action" to the exact tool "action" name declared under that agent's "tools" in the manifest.
-5. In step "payload", extract parameters declared for that tool.
-6. If no specialized domain agent matches the request, set "selected_agent" to "ai" and "action" to "general_chat".
-7. For email steps, ALWAYS include a "body" field containing the complete email text and reference previous step outputs using placeholders like "{{step_1.meet_link}}" or "{{meeting_details.meet_link}}".
-8. For each step, ALWAYS include a "description" field containing a concise, natural, user-friendly explanation of what this step is doing (e.g. "Fetching active sprint tasks from ClickUp", "Scheduling 1-hour Sprint Review on Google Calendar", "Sending invitation email").
+5. In step "payload", extract parameters declared for that tool. For "knowledge" agent ("answer_question"), set "question" in payload to the user question.
+6. For any questions asking about company information, Darko Novex, company vision, mission, values, policies, guidelines, employee handbook, coding standards, deployment guides, or internal documents, ALWAYS select "knowledge" as "selected_agent" and "answer_question" as "action".
+7. Only select "ai" with "general_chat" for pure conversational chit-chat or greetings (e.g. "hi", "who are you") that do not pertain to company facts or internal documents.
+8. For email steps, ALWAYS include a "body" field containing the complete email text and reference previous step outputs using placeholders like "{{{{step_1.meet_link}}}}" or "{{{{meeting_details.meet_link}}}}".
+9. For each step, ALWAYS include a "description" field containing a concise, natural, user-friendly explanation of what this step is doing.
 
 JSON Schema:
 {{
