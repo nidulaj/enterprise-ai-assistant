@@ -11,7 +11,7 @@ from agents.knowledge.tools import (
 
 class KnowledgeAgent(BaseAgent):
     name = "knowledge"
-    description = "Handles document search, questions about uploaded documents (RAG), and lists uploaded files."
+    description = "Handles enterprise knowledge base search, organizational knowledge, company information, vision, mission, policies, procedures, documentation, and answering questions from uploaded files (RAG)."
     @property
     def capabilities(self) -> list[str]:
         doc_names = []
@@ -24,8 +24,8 @@ class KnowledgeAgent(BaseAgent):
 
         available_str = f" (Uploaded files: {', '.join(doc_names)})" if doc_names else ""
         return [
-            f"Search uploaded PDF documents and company policies{available_str}",
-            "Answer questions about uploaded PDF files using company knowledge base (RAG)",
+            f"Answer questions about enterprise knowledge, organization facts, company vision, mission, values, policies, guidelines, and handbooks{available_str}",
+            "Search internal knowledge base and uploaded documents using semantic vector search (RAG)",
             "List uploaded document files and metadata"
         ]
 

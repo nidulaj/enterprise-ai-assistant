@@ -13,6 +13,7 @@ from agents.clickup.agent import ClickUpAgent
 from agents.calendar.agent import CalendarAgent
 from agents.knowledge.agent import KnowledgeAgent
 from agents.email.agent import EmailAgent
+from agents.graph.orchestrator import LangGraphOrchestrator
 
 
 class RouterAgent:
@@ -21,10 +22,11 @@ class RouterAgent:
     constructs multi-step execution plans for complex or single-agent requests,
     and orchestrates execution passing state via AgentContext.
     """
-    def __init__(self, registry: Optional[AgentRegistry] = None, tool_registry: Optional[ToolRegistry] = None):
+    def __init__(self, registry: Optional[AgentRegistry] = None, tool_registry: Optional[ToolRegistry] = None, use_langgraph: bool = True):
         self.tool_registry = tool_registry or ToolRegistry()
         self.registry = registry or AgentRegistry()
         self.ai_manager = AIManager()
+        self.use_langgraph = use_langgraph
 
         # Register default enterprise agents using the central tool registry
         self.registry.register(ClickUpAgent(tool_registry=self.tool_registry))
@@ -32,13 +34,22 @@ class RouterAgent:
         self.registry.register(KnowledgeAgent(tool_registry=self.tool_registry))
         self.registry.register(EmailAgent(tool_registry=self.tool_registry))
 
-    def route(self, message: str, model: str = "auto") -> AgentResponse:
+        if self.use_langgraph:
+            self._graph_orchestrator = LangGraphOrchestrator(
+                registry=self.registry,
+                tool_registry=self.tool_registry,
+                ai_manager=self.ai_manager
+            )
+
+    def route(self, message: str, model: str = "auto", thread_id: Optional[str] = None) -> AgentResponse:
         """
         Supervisor / Planner workflow:
-        1. Evaluates user request against agent capabilities.
-        2. Generates a single-step or multi-step execution plan.
-        3. Sequentially executes plan steps, resolving dynamic output placeholders via AgentContext.
+        1. When use_langgraph is enabled (default), executes stateful LangGraph pipeline.
+        2. Otherwise falls back to legacy sequential execution.
         """
+        if self.use_langgraph:
+            return self._graph_orchestrator.route(message=message, model=model, thread_id=thread_id)
+
         context = AgentContext(query=message, model=model)
         agent_manifest = self.registry.get_manifest()
 
@@ -62,10 +73,11 @@ Rules:
 2. If the request requires multiple steps or agents (e.g. create a meeting AND send an email invitation, or fetch tasks AND email summary), break it down into sequential execution steps under "plan".
 3. For single-agent requests, provide a single step in the "plan" array.
 4. For each step, set "selected_agent" to the matching agent name, and set "action" to the exact tool "action" name declared under that agent's "tools" in the manifest.
-5. In step "payload", extract parameters declared for that tool.
-6. If no specialized domain agent matches the request, set "selected_agent" to "ai" and "action" to "general_chat".
-7. For email steps, ALWAYS include a "body" field containing the complete email text and reference previous step outputs using placeholders like "{{step_1.meet_link}}" or "{{meeting_details.meet_link}}".
-8. For each step, ALWAYS include a "description" field containing a concise, natural, user-friendly explanation of what this step is doing (e.g. "Fetching active sprint tasks from ClickUp", "Scheduling 1-hour Sprint Review on Google Calendar", "Sending invitation email").
+5. In step "payload", extract parameters declared for that tool. For "knowledge" agent ("answer_question"), set "question" in payload to the user question.
+6. For ANY factual queries, domain knowledge questions, company/organization information, vision, mission, values, policies, rules, handbooks, guidelines, technical documents, or questions answered by uploaded files, ALWAYS select "knowledge" as "selected_agent" and "answer_question" as "action".
+7. Only select "ai" with "general_chat" for generic social conversation, casual chit-chat, or greetings (e.g. "hi", "how are you", "who are you", "tell a joke") that are not asking for factual or organizational knowledge.
+8. For email steps, ALWAYS include a "body" field containing the complete email text and reference previous step outputs using placeholders like "{{{{step_1.meet_link}}}}" or "{{{{meeting_details.meet_link}}}}".
+9. For each step, ALWAYS include a "description" field containing a concise, natural, user-friendly explanation of what this step is doing.
 
 JSON Schema:
 {{
@@ -324,7 +336,7 @@ JSON Schema:
         return first_line[:80] + ("..." if len(first_line) > 80 else "")
 
 
-    def route_stream(self, message: str, model: str = "auto"):
+    def route_stream(self, message: str, model: str = "auto", thread_id: Optional[str] = None):
         """
         Streaming Supervisor / Planner workflow yielding structured event dicts:
         - thinking: initial signal
@@ -334,6 +346,10 @@ JSON Schema:
         - step_complete: completion of an agent step with summary/data
         - done: completion of the entire run
         """
+        if self.use_langgraph:
+            yield from self._graph_orchestrator.route_stream(message=message, model=model, thread_id=thread_id)
+            return
+
         context = AgentContext(query=message, model=model)
         agent_manifest = self.registry.get_manifest()
 
@@ -362,10 +378,11 @@ Rules:
 2. If the request requires multiple steps or agents (e.g. create a meeting AND send an email invitation, or fetch tasks AND email summary), break it down into sequential execution steps under "plan".
 3. For single-agent requests, provide a single step in the "plan" array.
 4. For each step, set "selected_agent" to the matching agent name, and set "action" to the exact tool "action" name declared under that agent's "tools" in the manifest.
-5. In step "payload", extract parameters declared for that tool.
-6. If no specialized domain agent matches the request, set "selected_agent" to "ai" and "action" to "general_chat".
-7. For email steps, ALWAYS include a "body" field containing the complete email text and reference previous step outputs using placeholders like "{{step_1.meet_link}}" or "{{meeting_details.meet_link}}".
-8. For each step, ALWAYS include a "description" field containing a concise, natural, user-friendly explanation of what this step is doing (e.g. "Fetching active sprint tasks from ClickUp", "Scheduling 1-hour Sprint Review on Google Calendar", "Sending invitation email").
+5. In step "payload", extract parameters declared for that tool. For "knowledge" agent ("answer_question"), set "question" in payload to the user question.
+6. For ANY factual queries, domain knowledge questions, company/organization information, vision, mission, values, policies, rules, handbooks, guidelines, technical documents, or questions answered by uploaded files, ALWAYS select "knowledge" as "selected_agent" and "answer_question" as "action".
+7. Only select "ai" with "general_chat" for generic social conversation, casual chit-chat, or greetings (e.g. "hi", "how are you", "who are you", "tell a joke") that are not asking for factual or organizational knowledge.
+8. For email steps, ALWAYS include a "body" field containing the complete email text and reference previous step outputs using placeholders like "{{{{step_1.meet_link}}}}" or "{{{{meeting_details.meet_link}}}}".
+9. For each step, ALWAYS include a "description" field containing a concise, natural, user-friendly explanation of what this step is doing.
 
 JSON Schema:
 {{

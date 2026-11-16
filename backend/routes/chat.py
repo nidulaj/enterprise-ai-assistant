@@ -12,6 +12,7 @@ def chat_stream():
     data = request.json or {}
     message = data.get("message", "")
     model = data.get("model", "auto")
+    session_id = data.get("session_id") or data.get("thread_id") or "default_session"
     print("STREAM REQUEST:", data)
 
     if not message:
@@ -19,7 +20,7 @@ def chat_stream():
 
     def generate():
         try:
-            for event_payload in agent_router.route_stream(message=message, model=model):
+            for event_payload in agent_router.route_stream(message=message, model=model, thread_id=session_id):
                 event_name = event_payload.get("event", "message")
                 event_data = event_payload.get("data", {})
                 yield f"event: {event_name}\ndata: {json.dumps(event_data)}\n\n"
@@ -40,10 +41,11 @@ def chat_stream():
 
 @chat_bp.route("/chat", methods=["POST"])
 def chat():
-    data = request.json
+    data = request.json or {}
     
     message = data.get("message", "")
     model = data.get("model", "auto")
+    session_id = data.get("session_id") or data.get("thread_id") or "default_session"
     print("REQUEST:", data)
 
     if not message:
@@ -52,7 +54,7 @@ def chat():
         }), 400
     
     try:
-        response = agent_router.route(message=message, model=model)
+        response = agent_router.route(message=message, model=model, thread_id=session_id)
         
         source = response.source
         response_text = response.response_text
