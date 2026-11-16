@@ -13,6 +13,7 @@ from agents.clickup.agent import ClickUpAgent
 from agents.calendar.agent import CalendarAgent
 from agents.knowledge.agent import KnowledgeAgent
 from agents.email.agent import EmailAgent
+from agents.graph.orchestrator import LangGraphOrchestrator
 
 
 class RouterAgent:
@@ -21,10 +22,11 @@ class RouterAgent:
     constructs multi-step execution plans for complex or single-agent requests,
     and orchestrates execution passing state via AgentContext.
     """
-    def __init__(self, registry: Optional[AgentRegistry] = None, tool_registry: Optional[ToolRegistry] = None):
+    def __init__(self, registry: Optional[AgentRegistry] = None, tool_registry: Optional[ToolRegistry] = None, use_langgraph: bool = True):
         self.tool_registry = tool_registry or ToolRegistry()
         self.registry = registry or AgentRegistry()
         self.ai_manager = AIManager()
+        self.use_langgraph = use_langgraph
 
         # Register default enterprise agents using the central tool registry
         self.registry.register(ClickUpAgent(tool_registry=self.tool_registry))
@@ -32,13 +34,22 @@ class RouterAgent:
         self.registry.register(KnowledgeAgent(tool_registry=self.tool_registry))
         self.registry.register(EmailAgent(tool_registry=self.tool_registry))
 
-    def route(self, message: str, model: str = "auto") -> AgentResponse:
+        if self.use_langgraph:
+            self._graph_orchestrator = LangGraphOrchestrator(
+                registry=self.registry,
+                tool_registry=self.tool_registry,
+                ai_manager=self.ai_manager
+            )
+
+    def route(self, message: str, model: str = "auto", thread_id: Optional[str] = None) -> AgentResponse:
         """
         Supervisor / Planner workflow:
-        1. Evaluates user request against agent capabilities.
-        2. Generates a single-step or multi-step execution plan.
-        3. Sequentially executes plan steps, resolving dynamic output placeholders via AgentContext.
+        1. When use_langgraph is enabled (default), executes stateful LangGraph pipeline.
+        2. Otherwise falls back to legacy sequential execution.
         """
+        if self.use_langgraph:
+            return self._graph_orchestrator.route(message=message, model=model, thread_id=thread_id)
+
         context = AgentContext(query=message, model=model)
         agent_manifest = self.registry.get_manifest()
 
@@ -324,7 +335,7 @@ JSON Schema:
         return first_line[:80] + ("..." if len(first_line) > 80 else "")
 
 
-    def route_stream(self, message: str, model: str = "auto"):
+    def route_stream(self, message: str, model: str = "auto", thread_id: Optional[str] = None):
         """
         Streaming Supervisor / Planner workflow yielding structured event dicts:
         - thinking: initial signal
@@ -334,6 +345,10 @@ JSON Schema:
         - step_complete: completion of an agent step with summary/data
         - done: completion of the entire run
         """
+        if self.use_langgraph:
+            yield from self._graph_orchestrator.route_stream(message=message, model=model, thread_id=thread_id)
+            return
+
         context = AgentContext(query=message, model=model)
         agent_manifest = self.registry.get_manifest()
 
