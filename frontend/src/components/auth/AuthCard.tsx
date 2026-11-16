@@ -9,7 +9,12 @@ import {
   Zap, 
   Lock, 
   AlertCircle,
-  Server
+  Server,
+  Network,
+  Database,
+  CheckSquare,
+  Calendar,
+  Mail
 } from "lucide-react";
 
 type AuthCardProps = {
@@ -67,6 +72,38 @@ export function AuthCard({ title, description, children }: AuthCardProps) {
               <p className="text-base sm:text-lg text-slate-400 max-w-xl leading-relaxed">
                 Connect your organization&apos;s confidential data, orchestrate advanced models, and accelerate decision-making inside a zero-trust enclave.
               </p>
+            </div>
+
+            {/* Orchestrated Multi-Agent Cluster Showcase */}
+            <div className="rounded-2xl border border-indigo-500/20 bg-indigo-950/20 p-3.5 backdrop-blur-sm space-y-2.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-indigo-300 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                  <Network className="h-3.5 w-3.5 text-indigo-400" />
+                  Autonomous Multi-Agent Swarm
+                </span>
+                <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  LangGraph Active
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-900/60 px-2.5 py-1 text-slate-300 hover:border-cyan-500/40 transition-colors">
+                  <Database className="h-3 w-3 text-cyan-400" />
+                  <span>Knowledge RAG Agent</span>
+                </div>
+                <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-900/60 px-2.5 py-1 text-slate-300 hover:border-purple-500/40 transition-colors">
+                  <CheckSquare className="h-3 w-3 text-purple-400" />
+                  <span>ClickUp Tasks Agent</span>
+                </div>
+                <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-900/60 px-2.5 py-1 text-slate-300 hover:border-blue-500/40 transition-colors">
+                  <Calendar className="h-3 w-3 text-blue-400" />
+                  <span>Calendar Agent</span>
+                </div>
+                <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-900/60 px-2.5 py-1 text-slate-300 hover:border-amber-500/40 transition-colors">
+                  <Mail className="h-3 w-3 text-amber-400" />
+                  <span>SMTP Email Agent</span>
+                </div>
+              </div>
             </div>
 
             {/* Value Proposition Cards */}

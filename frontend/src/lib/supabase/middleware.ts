@@ -1,23 +1,26 @@
 import { NextResponse, type NextRequest } from "next/server";
-
-import { getSessionFromRequest } from "@/lib/auth/session";
+import { hasSessionInRequest } from "@/lib/auth/session";
 
 export async function updateSession(request: NextRequest) {
-  const session = getSessionFromRequest(request);
+  const isAuthenticated = hasSessionInRequest(request);
   const pathname = request.nextUrl.pathname;
   const isAuthRoute = pathname.startsWith("/login");
+  const isRoot = pathname === "/";
+  const isProtectedRoute = pathname.startsWith("/chat") || pathname.startsWith("/dashboard");
 
-  if (!session && pathname.startsWith("/dashboard")) {
+  // 1. Authenticated users visiting root '/' or '/login' -> redirect to '/chat'
+  if (isAuthenticated && (isRoot || isAuthRoute)) {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", pathname);
+    url.pathname = "/chat";
+    url.search = "";
     return NextResponse.redirect(url);
   }
 
-  if (session && isAuthRoute) {
+  // 2. Protected routes ('/chat', '/dashboard') -> require authenticated session cookie
+  if (!isAuthenticated && isProtectedRoute) {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    url.search = "";
+    url.pathname = "/";
+    url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
 

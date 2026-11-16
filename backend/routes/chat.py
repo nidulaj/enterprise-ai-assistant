@@ -3,11 +3,13 @@ import traceback
 from flask import Blueprint, request, jsonify, Response, stream_with_context
 
 from agents.base.router_agent import RouterAgent
+from routes.auth import token_required
 
 chat_bp = Blueprint('chat', __name__)
 agent_router = RouterAgent()
 
 @chat_bp.route("/chat/stream", methods=["POST"])
+@token_required
 def chat_stream():
     data = request.json or {}
     message = data.get("message", "")
@@ -35,11 +37,15 @@ def chat_stream():
     response.headers["Cache-Control"] = "no-cache"
     response.headers["X-Accel-Buffering"] = "no"
     response.headers["Connection"] = "keep-alive"
-    response.headers["Access-Control-Allow-Origin"] = "*"
+    origin = request.headers.get("Origin")
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
 
 
 @chat_bp.route("/chat", methods=["POST"])
+@token_required
 def chat():
     data = request.json or {}
     

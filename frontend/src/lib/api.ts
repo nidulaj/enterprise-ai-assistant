@@ -1,9 +1,10 @@
 import axios from "axios";
 import { ModelOption, DocumentItem, ThoughtStep } from "@/types/chat";
 
-// Create Axios instance using environment variable or fallback to backend default port
+// Create Axios instance with credentials enabled for HttpOnly cookies
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000",
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
@@ -57,11 +58,14 @@ export const sendChatMessageStream = async (
   callbacks: StreamCallbacks
 ): Promise<void> => {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
   const response = await fetch(`${baseUrl}/chat/stream`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
+    credentials: "include",
     body: JSON.stringify({ message, model }),
   });
 
